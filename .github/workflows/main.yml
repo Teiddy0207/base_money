@@ -1,0 +1,93 @@
+name: Build and Deploy Dev
+
+on:
+  pull_request:
+    branches:
+      - develop
+    types:
+      - closed
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: Teiddy0207/base_money-backend
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set environment and tag
+        id: env
+        run: |
+          echo "environment=development" >> $GITHUB_OUTPUT
+          echo "tag=dev" >> $GITHUB_OUTPUT
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: type=raw,value=${{ steps.env.outputs.tag }}
+      - id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Output image
+        id: image
+        run: |
+          echo "image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.tag }}" >> $GITHUB_OUTPUT
+
+  deploy-development:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: development
+    steps:
+      - uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEV_SSH_SERVER_HOST }}
+          username: ${{ secrets.DEV_SSH_SERVER_USER }}
+          key: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.DEV_SSH_SERVER_PORT }}
+          script: |
+            echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker stop base_money-backend || true
+            docker rm base_money-backend || true
+            docker network inspect safe_money_network >/dev/null 2>&1 || docker network create safe_money_network
+            docker pull ${{ needs.build-and-push.outputs.image }}
+            docker run -d \
+              --name base_money-backend \
+              -p 7070:7070 \
+              --network safe_money_network \
+              -v safe_money_logs_volume:/app/logs \
+              --restart unless-stopped \
+              -e APP_ENV=development \
+              -e APP_SERVER_HOST=0.0.0.0 \
+              -e APP_SERVER_BASE_URL="${{ secrets.DEV_SERVER_BASE_URL }}" \
+              -e APP_DATABASE_HOST="${{ secrets.DEV_DB_HOST }}" \
+              -e APP_DATABASE_PORT="${{ secrets.DEV_DB_PORT }}" \
+              -e APP_DATABASE_USER="${{ secrets.DEV_DB_USER }}" \
+              -e APP_DATABASE_PASSWORD="${{ secrets.DEV_DB_PASSWORD }}" \
+              -e APP_DATABASE_DBNAME="${{ secrets.DEV_DB_NAME }}" \
+              -e APP_REDIS_ADDRESS="${{ secrets.DEV_REDIS_ADDRESS }}" \
+              ${{ needs.build-and-push.outputs.image }}
+            docker image prune -f
+            sleep 10
+            if docker ps | grep -q base_money-backend; then
+              echo "✅ Deploy development successful"
+            else
+              echo "❌ Deploy development failed"
+              exit 1
