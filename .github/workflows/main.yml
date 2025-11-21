@@ -90,6 +90,9 @@ jobs:
               -e APP_JWT_SECRET="${{ secrets.DEV_JWT_SECRET }}" \
               -e APP_R2_ACCESS_KEY_ID="none" \
               -e APP_R2_SECRET_ACCESS_KEY="none" \
+              -e APP_R2_ENDPOINT="none" \
+              -e APP_R2_REGION="none" \
+              -e APP_R2_BUCKET="none" \
               ${{ needs.build-and-push.outputs.image }}
             docker image prune -f
             sleep 10
