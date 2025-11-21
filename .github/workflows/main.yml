@@ -95,3 +95,4 @@ jobs:
             else
               echo "❌ Deploy development failed"
               exit 1
+            fi  
