@@ -87,6 +87,7 @@ jobs:
               -e APP_DATABASE_PASSWORD="${{ secrets.DEV_DB_PASSWORD }}" \
               -e APP_DATABASE_DBNAME="${{ secrets.DEV_DB_NAME }}" \
               -e APP_REDIS_ADDRESS="${{ secrets.DEV_REDIS_ADDRESS }}" \
+              -e APP_JWT_SECRET="${{ secrets.DEV_JWT_SECRET }}" \
               ${{ needs.build-and-push.outputs.image }}
             docker image prune -f
             sleep 10
