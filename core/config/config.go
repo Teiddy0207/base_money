@@ -196,10 +196,10 @@ func Init(env Environment) error {
 		v.BindEnv("server.base_url", "APP_SERVER_BASE_URL")
 
 		// Database configuration
-		v.BindEnv("database.host", "APP_DATABASE_HOST")
-		v.BindEnv("database.port", "APP_DATABASE_PORT")
-		v.BindEnv("database.user", "APP_DATABASE_USER")
-		v.BindEnv("database.password", "APP_DATABASE_PASSWORD")
+		v.BindEnv("database.host", "DEV_DB_HOST")
+		v.BindEnv("database.port", "DEV_DB_PORT")
+		v.BindEnv("database.user", "DEV_DB_USER")
+		v.BindEnv("database.password", "DEV_DB_PASSWORD")
 		v.BindEnv("database.dbname", "APP_DATABASE_DBNAME")
 
 		// SMTP configuration
