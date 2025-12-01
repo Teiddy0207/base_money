@@ -75,6 +75,13 @@ type Config struct {
 	SMTP        SMTPConfig
 	Redis       RedisConfig `mapstructure:"redis"`
 	R2          R2Config    `mapstructure:"r2"`
+	GoogleAPI   GoogleAPIConfig `mapstructure:"google_api"`
+}
+
+type GoogleAPIConfig struct {
+	ClientID     string `mapstructure:"client_id"`
+	ClientSecret string `mapstructure:"client_secret"`
+	RedirectURI  string `mapstructure:"redirect_uri"`
 }
 
 // ----------------------------------------------------------------------------
@@ -224,6 +231,11 @@ func Init(env Environment) error {
 
 		// JWT configuration
 		v.BindEnv("jwt.secret", "APP_JWT_SECRET")
+
+		// Google API configuration
+		v.BindEnv("google_api.client_id", "GOOGLE_CLIENT_ID")
+		v.BindEnv("google_api.client_secret", "GOOGLE_CLIENT_SECRET")
+		v.BindEnv("google_api.redirect_uri", "GOOGLE_REDIRECT_URI")
 
 		// 3. Unmarshal
 		instance = &Config{}
