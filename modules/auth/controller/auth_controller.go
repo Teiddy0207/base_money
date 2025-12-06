@@ -1,11 +1,13 @@
 package controller
 
 import (
+	"go-api-starter/core/config"
 	"go-api-starter/core/errors"
 	"go-api-starter/core/logger"
 	"go-api-starter/core/utils"
 	"go-api-starter/modules/auth/dto"
 	"go-api-starter/modules/auth/validator"
+	"net/http"
 
 	"github.com/labstack/echo/v4"
 )
@@ -193,4 +195,126 @@ func (controller *AuthController) RefreshToken(c echo.Context) error {
 	}
 
 	return controller.SuccessResponse(c, refreshTokenResponse, "Refresh token success")
+}
+
+// GoogleAuth redirects user to Google OAuth login page
+func (controller *AuthController) GoogleAuth(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	authURL, err := controller.AuthService.GetGoogleAuthURL(ctx)
+	if err != nil {
+		return controller.InternalServerError(err.Code, err.Message, err)
+	}
+
+	return c.Redirect(http.StatusFound, authURL)
+}
+
+// GoogleAuthInfo returns OAuth configuration info (for debugging)
+func (controller *AuthController) GoogleAuthInfo(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	authURL, err := controller.AuthService.GetGoogleAuthURL(ctx)
+	if err != nil {
+		return controller.InternalServerError(err.Code, err.Message, err)
+	}
+
+	cfg, ok := config.GetSafe()
+	if !ok {
+		return controller.InternalServerError(errors.ErrInternalServer, "config not initialized", nil)
+	}
+
+	response := map[string]interface{}{
+		"auth_url":     authURL,
+		"redirect_uri": cfg.GoogleAPI.RedirectURI,
+		"client_id":    cfg.GoogleAPI.ClientID,
+		"has_secret":   cfg.GoogleAPI.ClientSecret != "",
+		"message":      "Visit the auth_url in your browser to start OAuth flow",
+	}
+
+	return controller.SuccessResponse(c, response, "Google OAuth configuration")
+}
+
+// GoogleCallback handles the OAuth callback from Google
+func (controller *AuthController) GoogleCallback(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	code := c.QueryParam("code")
+	state := c.QueryParam("state")
+	errorParam := c.QueryParam("error")
+
+	// Check if Google returned an error
+	if errorParam != "" {
+		errorDescription := c.QueryParam("error_description")
+		logger.Error("Google OAuth error", "error", errorParam, "description", errorDescription)
+		return controller.BadRequest(errors.ErrInvalidRequestData, "Google OAuth error: "+errorParam, nil)
+	}
+
+	if code == "" {
+		return controller.BadRequest(errors.ErrInvalidRequestData, "authorization code is required. Please initiate OAuth flow by visiting /api/v1/public/auth/google first", nil)
+	}
+
+	if state == "" {
+		return controller.BadRequest(errors.ErrInvalidRequestData, "state parameter is required for security validation", nil)
+	}
+
+	loginResponse, err := controller.AuthService.HandleGoogleCallback(ctx, code, state)
+	if err != nil {
+		return controller.InternalServerError(err.Code, err.Message, err)
+	}
+
+	return controller.SuccessResponse(c, loginResponse, "Google login success")
+}
+
+// GetGoogleCalendarEvents retrieves Google Calendar events for authenticated user
+func (controller *AuthController) GetGoogleCalendarEvents(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	// Get user ID from token
+	token, err := utils.GetTokenFromHeader(c)
+	if err != nil {
+		return controller.BadRequest(errors.ErrInvalidRequestData, "Invalid token", nil)
+	}
+
+	tokenData, err := utils.ValidateAndParseToken(token)
+	if err != nil {
+		return controller.BadRequest(errors.ErrInvalidRequestData, "Invalid token", nil)
+	}
+
+	userID := tokenData.UserID
+
+	// Get query parameters
+	timeMin := c.QueryParam("time_min")
+	timeMax := c.QueryParam("time_max")
+
+	events, appErr := controller.AuthService.GetGoogleCalendarEvents(ctx, userID, timeMin, timeMax)
+	if appErr != nil {
+		return controller.InternalServerError(appErr.Code, appErr.Message, appErr)
+	}
+
+	return controller.SuccessResponse(c, events, "Calendar events retrieved successfully")
+}
+
+// GetGoogleCalendarList retrieves list of Google Calendars for authenticated user
+func (controller *AuthController) GetGoogleCalendarList(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	// Get user ID from token
+	token, err := utils.GetTokenFromHeader(c)
+	if err != nil {
+		return controller.BadRequest(errors.ErrInvalidRequestData, "Invalid token", nil)
+	}
+
+	tokenData, err := utils.ValidateAndParseToken(token)
+	if err != nil {
+		return controller.BadRequest(errors.ErrInvalidRequestData, "Invalid token", nil)
+	}
+
+	userID := tokenData.UserID
+
+	calendars, appErr := controller.AuthService.GetGoogleCalendarList(ctx, userID)
+	if appErr != nil {
+		return controller.InternalServerError(appErr.Code, appErr.Message, appErr)
+	}
+
+	return controller.SuccessResponse(c, calendars, "Calendar list retrieved successfully")
 }

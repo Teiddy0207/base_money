@@ -8,17 +8,30 @@ import (
 	"go-api-starter/modules/auth/dto"
 	"go-api-starter/modules/auth/entity"
 	"go-api-starter/modules/auth/repository"
+	"time"
 
 	"github.com/google/uuid"
 )
 
 type AuthService struct {
-	repo  repository.AuthRepositoryInterface
-	cache cache.Cache
+	repo         repository.AuthRepositoryInterface
+	cache        cache.Cache
+	googleTokens map[uuid.UUID]*GoogleToken
+}
+
+// GoogleToken stores Google OAuth tokens
+type GoogleToken struct {
+	AccessToken  string
+	RefreshToken string
+	ExpiresAt    time.Time
 }
 
 func NewAuthService(repo repository.AuthRepositoryInterface, cache cache.Cache) AuthServiceInterface {
-	return &AuthService{repo: repo, cache: cache}
+	return &AuthService{
+		repo:         repo,
+		cache:        cache,
+		googleTokens: make(map[uuid.UUID]*GoogleToken),
+	}
 }
 
 type AuthServiceInterface interface {
@@ -57,4 +70,12 @@ type AuthServiceInterface interface {
 	PrivateGetUser(ctx context.Context, userID uuid.UUID) (*dto.UserDetailDTO, *errors.AppError)
 	PrivateGetPermissionsByUserID(ctx context.Context, userID uuid.UUID) (*[]dto.PermissionResponse, error)
 	PrivateGetPermissionsByUserIDFromCache(ctx context.Context, userID uuid.UUID) (*[]dto.PermissionResponse, error)
+
+	// Google OAuth methods
+	GetGoogleAuthURL(ctx context.Context) (string, *errors.AppError)
+	HandleGoogleCallback(ctx context.Context, code string, state string) (*dto.LoginResponse, *errors.AppError)
+
+	// Google Calendar methods
+	GetGoogleCalendarEvents(ctx context.Context, userID uuid.UUID, timeMin string, timeMax string) ([]GoogleCalendarEvent, *errors.AppError)
+	GetGoogleCalendarList(ctx context.Context, userID uuid.UUID) ([]GoogleCalendar, *errors.AppError)
 }

@@ -5,6 +5,7 @@ import (
 	"go-api-starter/core/database"
 	"go-api-starter/core/params"
 	"go-api-starter/modules/auth/entity"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -62,4 +63,12 @@ type AuthRepositoryInterface interface {
 	PrivateAssignPermissionToRole(ctx context.Context, roleID uuid.UUID, permissionIDs []uuid.UUID, grantedBy uuid.UUID) error
 	PrivateGetPermissionsByUserID(ctx context.Context, userId uuid.UUID) (*[]entity.Permission, error)
 	PrivateAssignPermissionToUser(ctx context.Context, req *entity.UserPermission) error
+
+	// ========================================
+	// OAuth State Operations
+	// ========================================
+	SaveOAuthState(ctx context.Context, state string, expiresAt time.Time) error
+	GetOAuthState(ctx context.Context, state string) (*entity.OAuthState, error)
+	DeleteOAuthState(ctx context.Context, state string) error
+	CleanupExpiredOAuthStates(ctx context.Context) error
 }

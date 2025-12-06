@@ -36,6 +36,15 @@ func (r *AuthRouter) Setup(e *echo.Echo, middleware *middleware.Middleware) {
 	authPublicRoutes.POST("/send-otp-change-password", r.AuthController.SendOTPChangePassword)
 	authPublicRoutes.POST("/change-password", r.AuthController.ChangePassword)
 
+	// Google OAuth routes
+	authPublicRoutes.GET("/google", r.AuthController.GoogleAuth)
+	authPublicRoutes.GET("/google/info", r.AuthController.GoogleAuthInfo) // Debug endpoint
+	authPublicRoutes.GET("/google/callback", r.AuthController.GoogleCallback)
+
+	// Google Calendar routes (protected)
+	authPublicRoutes.GET("/google/calendar/events", r.AuthController.GetGoogleCalendarEvents, middleware.AuthMiddleware())
+	authPublicRoutes.GET("/google/calendar/list", r.AuthController.GetGoogleCalendarList, middleware.AuthMiddleware())
+
 	authPublicRoutes.POST("/update-password", r.AuthController.ChangePassword, middleware.AuthMiddleware())
 	authPublicRoutes.PUT("user-profile", r.AuthController.UpdateUserProfile, middleware.AuthMiddleware())
 
