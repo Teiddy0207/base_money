@@ -71,4 +71,12 @@ type AuthRepositoryInterface interface {
 	GetOAuthState(ctx context.Context, state string) (*entity.OAuthState, error)
 	DeleteOAuthState(ctx context.Context, state string) error
 	CleanupExpiredOAuthStates(ctx context.Context) error
+
+	// ========================================
+	// Social Login Operations
+	// ========================================
+	GetSocialLoginByUserIDAndProvider(ctx context.Context, userID uuid.UUID, providerID uuid.UUID) (*entity.SocialLogin, error)
+	SaveOrUpdateSocialLogin(ctx context.Context, socialLogin *entity.SocialLogin) error
+	GetOAuthProviderByName(ctx context.Context, name string) (*entity.OAuthProvider, error)
+	SeedGoogleProvider(ctx context.Context, clientID string, clientSecret string, redirectURI string) error
 }

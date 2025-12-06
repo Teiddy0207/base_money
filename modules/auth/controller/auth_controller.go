@@ -4,6 +4,7 @@ import (
 	"go-api-starter/core/config"
 	"go-api-starter/core/errors"
 	"go-api-starter/core/logger"
+	"go-api-starter/core/params"
 	"go-api-starter/core/utils"
 	"go-api-starter/modules/auth/dto"
 	"go-api-starter/modules/auth/validator"
@@ -298,7 +299,6 @@ func (controller *AuthController) GetGoogleCalendarEvents(c echo.Context) error 
 func (controller *AuthController) GetGoogleCalendarList(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	// Get user ID from token
 	token, err := utils.GetTokenFromHeader(c)
 	if err != nil {
 		return controller.BadRequest(errors.ErrInvalidRequestData, "Invalid token", nil)
@@ -310,8 +310,9 @@ func (controller *AuthController) GetGoogleCalendarList(c echo.Context) error {
 	}
 
 	userID := tokenData.UserID
+	queryParams := params.NewQueryParams(c)
 
-	calendars, appErr := controller.AuthService.GetGoogleCalendarList(ctx, userID)
+	calendars, appErr := controller.AuthService.GetGoogleCalendarList(ctx, userID, *queryParams)
 	if appErr != nil {
 		return controller.InternalServerError(appErr.Code, appErr.Message, appErr)
 	}

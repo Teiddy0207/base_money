@@ -5,8 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"go-api-starter/core/config"
+	"go-api-starter/core/constants"
 	"go-api-starter/core/errors"
 	"go-api-starter/core/logger"
+	"go-api-starter/core/params"
+	"go-api-starter/modules/auth/dto"
+	"go-api-starter/modules/auth/mapper"
 	"io"
 	"net/http"
 	"net/url"
@@ -17,175 +21,214 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-// GoogleCalendar represents a Google Calendar
-type GoogleCalendar struct {
-	ID          string `json:"id"`
-	Summary     string `json:"summary"`
-	Description string `json:"description"`
-	TimeZone    string `json:"timeZone"`
-}
+func (service *AuthService) GetGoogleCalendarEvents(ctx context.Context, userID uuid.UUID, timeMin string, timeMax string) ([]dto.GoogleCalendarEvent, *errors.AppError) {
+	ctx, cancel := context.WithTimeout(ctx, constants.DefaultTimeout)
+	defer cancel()
 
-// GoogleCalendarEvent represents a Google Calendar event
-type GoogleCalendarEvent struct {
-	ID          string    `json:"id"`
-	Summary     string    `json:"summary"`
-	Description string    `json:"description"`
-	Start       EventTime `json:"start"`
-	End         EventTime `json:"end"`
-	Location    string    `json:"location"`
-	Status      string    `json:"status"`
-}
-
-// EventTime represents event start/end time
-type EventTime struct {
-	DateTime string `json:"dateTime"`
-	Date     string `json:"date"`
-	TimeZone string `json:"timeZone"`
-}
-
-// GetGoogleCalendarEvents retrieves calendar events for a user
-func (service *AuthService) GetGoogleCalendarEvents(ctx context.Context, userID uuid.UUID, timeMin string, timeMax string) ([]GoogleCalendarEvent, *errors.AppError) {
-	// Get Google access token for user
 	googleToken, err := service.getGoogleTokenForUser(ctx, userID)
 	if err != nil {
+		logger.Error("AuthService:GetGoogleCalendarEvents:GetGoogleToken:Error", "error", err, "user_id", userID)
 		return nil, errors.NewAppError(errors.ErrUnauthorized, "Google OAuth token not found. Please login with Google again", nil)
 	}
 
-	// Build Calendar API URL
-	apiURL := "https://www.googleapis.com/calendar/v3/calendars/primary/events"
-	params := url.Values{}
-	params.Add("singleEvents", "true")
-	params.Add("orderBy", "startTime")
-	
-	if timeMin != "" {
-		params.Add("timeMin", timeMin)
-	} else {
-		// Default: events from now
-		params.Add("timeMin", time.Now().Format(time.RFC3339))
-	}
-	
-	if timeMax != "" {
-		params.Add("timeMax", timeMax)
+	apiURL := service.buildCalendarEventsURL(timeMin, timeMax)
+	events, appErr := service.fetchGoogleCalendarEvents(ctx, apiURL, googleToken)
+	if appErr != nil {
+		return nil, appErr
 	}
 
-	apiURL += "?" + params.Encode()
-
-	// Make request to Google Calendar API
-	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
-	if err != nil {
-		logger.Error("AuthService:GetGoogleCalendarEvents:NewRequest:Error", "error", err)
-		return nil, errors.NewAppError(errors.ErrInternalServer, "failed to create request", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+googleToken)
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		logger.Error("AuthService:GetGoogleCalendarEvents:DoRequest:Error", "error", err)
-		return nil, errors.NewAppError(errors.ErrInternalServer, "failed to fetch calendar events", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		logger.Error("AuthService:GetGoogleCalendarEvents:APIError", "status", resp.StatusCode, "body", string(body))
-		return nil, errors.NewAppError(errors.ErrInternalServer, fmt.Sprintf("Google Calendar API error: %d", resp.StatusCode), nil)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		logger.Error("AuthService:GetGoogleCalendarEvents:ReadBody:Error", "error", err)
-		return nil, errors.NewAppError(errors.ErrInternalServer, "failed to read response", err)
-	}
-
-	var calendarResponse struct {
-		Items []GoogleCalendarEvent `json:"items"`
-	}
-	if err := json.Unmarshal(body, &calendarResponse); err != nil {
-		logger.Error("AuthService:GetGoogleCalendarEvents:Unmarshal:Error", "error", err)
-		return nil, errors.NewAppError(errors.ErrInternalServer, "failed to parse response", err)
-	}
-
-	return calendarResponse.Items, nil
+	return mapper.ToGoogleCalendarEventsDTO(events), nil
 }
 
-// GetGoogleCalendarList retrieves list of calendars for a user
-func (service *AuthService) GetGoogleCalendarList(ctx context.Context, userID uuid.UUID) ([]GoogleCalendar, *errors.AppError) {
-	// Get Google access token for user
+func (service *AuthService) GetGoogleCalendarList(ctx context.Context, userID uuid.UUID, params params.QueryParams) (*dto.PaginatedGoogleCalendarDTO, *errors.AppError) {
+	ctx, cancel := context.WithTimeout(ctx, constants.DefaultTimeout)
+	defer cancel()
+
 	googleToken, err := service.getGoogleTokenForUser(ctx, userID)
 	if err != nil {
+		logger.Error("AuthService:GetGoogleCalendarList:GetGoogleToken:Error", "error", err, "user_id", userID)
 		return nil, errors.NewAppError(errors.ErrUnauthorized, "Google OAuth token not found. Please login with Google again", nil)
 	}
 
-	// Make request to Google Calendar API
+	allCalendars, appErr := service.fetchGoogleCalendarList(ctx, googleToken)
+	if appErr != nil {
+		return nil, appErr
+	}
+
+	totalItems := len(allCalendars)
+	offset := (params.PageNumber - 1) * params.PageSize
+	end := offset + params.PageSize
+
+	if offset > totalItems {
+		return mapper.ToPaginatedGoogleCalendarDTO([]dto.GoogleCalendar{}, totalItems, params.PageNumber, params.PageSize), nil
+	}
+
+	if end > totalItems {
+		end = totalItems
+	}
+
+	paginatedItems := allCalendars[offset:end]
+
+	return mapper.ToPaginatedGoogleCalendarDTO(paginatedItems, totalItems, params.PageNumber, params.PageSize), nil
+}
+
+func (service *AuthService) fetchGoogleCalendarList(ctx context.Context, accessToken string) ([]dto.GoogleCalendar, *errors.AppError) {
 	apiURL := "https://www.googleapis.com/calendar/v3/users/me/calendarList"
 	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
 	if err != nil {
-		logger.Error("AuthService:GetGoogleCalendarList:NewRequest:Error", "error", err)
+		logger.Error("AuthService:fetchGoogleCalendarList:NewRequest:Error", "error", err)
 		return nil, errors.NewAppError(errors.ErrInternalServer, "failed to create request", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+googleToken)
+	req.Header.Set("Authorization", "Bearer "+accessToken)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		logger.Error("AuthService:GetGoogleCalendarList:DoRequest:Error", "error", err)
+		logger.Error("AuthService:fetchGoogleCalendarList:DoRequest:Error", "error", err)
 		return nil, errors.NewAppError(errors.ErrInternalServer, "failed to fetch calendar list", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		logger.Error("AuthService:GetGoogleCalendarList:APIError", "status", resp.StatusCode, "body", string(body))
+		logger.Error("AuthService:fetchGoogleCalendarList:APIError", "status", resp.StatusCode, "body", string(body))
 		return nil, errors.NewAppError(errors.ErrInternalServer, fmt.Sprintf("Google Calendar API error: %d", resp.StatusCode), nil)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logger.Error("AuthService:GetGoogleCalendarList:ReadBody:Error", "error", err)
+		logger.Error("AuthService:fetchGoogleCalendarList:ReadBody:Error", "error", err)
 		return nil, errors.NewAppError(errors.ErrInternalServer, "failed to read response", err)
 	}
 
 	var calendarListResponse struct {
-		Items []GoogleCalendar `json:"items"`
+		Items []dto.GoogleCalendar `json:"items"`
 	}
 	if err := json.Unmarshal(body, &calendarListResponse); err != nil {
-		logger.Error("AuthService:GetGoogleCalendarList:Unmarshal:Error", "error", err)
+		logger.Error("AuthService:fetchGoogleCalendarList:Unmarshal:Error", "error", err)
 		return nil, errors.NewAppError(errors.ErrInternalServer, "failed to parse response", err)
 	}
 
 	return calendarListResponse.Items, nil
 }
 
-// getGoogleTokenForUser retrieves Google access token for a user
+func (service *AuthService) buildCalendarEventsURL(timeMin string, timeMax string) string {
+	apiURL := "https://www.googleapis.com/calendar/v3/calendars/primary/events"
+	params := url.Values{}
+	params.Add("singleEvents", "true")
+	params.Add("orderBy", "startTime")
+
+	if timeMin != "" {
+		params.Add("timeMin", timeMin)
+	} else {
+		params.Add("timeMin", time.Now().Format(time.RFC3339))
+	}
+
+	if timeMax != "" {
+		params.Add("timeMax", timeMax)
+	}
+
+	return apiURL + "?" + params.Encode()
+}
+
+func (service *AuthService) fetchGoogleCalendarEvents(ctx context.Context, apiURL string, accessToken string) ([]dto.GoogleCalendarEvent, *errors.AppError) {
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	if err != nil {
+		logger.Error("AuthService:fetchGoogleCalendarEvents:NewRequest:Error", "error", err)
+		return nil, errors.NewAppError(errors.ErrInternalServer, "failed to create request", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.Error("AuthService:fetchGoogleCalendarEvents:DoRequest:Error", "error", err)
+		return nil, errors.NewAppError(errors.ErrInternalServer, "failed to fetch calendar events", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		logger.Error("AuthService:fetchGoogleCalendarEvents:APIError", "status", resp.StatusCode, "body", string(body))
+		return nil, errors.NewAppError(errors.ErrInternalServer, fmt.Sprintf("Google Calendar API error: %d", resp.StatusCode), nil)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logger.Error("AuthService:fetchGoogleCalendarEvents:ReadBody:Error", "error", err)
+		return nil, errors.NewAppError(errors.ErrInternalServer, "failed to read response", err)
+	}
+
+	var calendarResponse struct {
+		Items []dto.GoogleCalendarEvent `json:"items"`
+	}
+	if err := json.Unmarshal(body, &calendarResponse); err != nil {
+		logger.Error("AuthService:fetchGoogleCalendarEvents:Unmarshal:Error", "error", err)
+		return nil, errors.NewAppError(errors.ErrInternalServer, "failed to parse response", err)
+	}
+
+	return calendarResponse.Items, nil
+}
+
 func (service *AuthService) getGoogleTokenForUser(ctx context.Context, userID uuid.UUID) (string, error) {
-	// Get from in-memory storage
-	googleToken, exists := service.googleTokens[userID]
-	if !exists || googleToken == nil {
+	provider, err := service.repo.GetOAuthProviderByName(ctx, "google")
+	if err != nil {
+		return "", fmt.Errorf("failed to get Google provider: %w", err)
+	}
+	if provider == nil {
+		return "", fmt.Errorf("Google provider not found in database")
+	}
+
+	socialLogin, err := service.repo.GetSocialLoginByUserIDAndProvider(ctx, userID, provider.ID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get social login: %w", err)
+	}
+	if socialLogin == nil || socialLogin.AccessToken == nil {
 		return "", fmt.Errorf("Google token not found for user %s. Please login with Google again", userID)
 	}
 
-	// Check if token is expired
-	if time.Now().After(googleToken.ExpiresAt) {
-		// Token expired, try to refresh
-		if googleToken.RefreshToken != "" {
-			newToken, err := service.refreshGoogleToken(ctx, googleToken.RefreshToken)
-			if err != nil {
-				return "", fmt.Errorf("failed to refresh Google token: %w", err)
-			}
-			// Update stored token
-			service.googleTokens[userID] = newToken
-			return newToken.AccessToken, nil
-		}
-		return "", fmt.Errorf("Google token expired and no refresh token available")
+	accessToken := *socialLogin.AccessToken
+	refreshToken := ""
+	if socialLogin.RefreshToken != nil {
+		refreshToken = *socialLogin.RefreshToken
 	}
 
-	return googleToken.AccessToken, nil
+	var expiresAt time.Time
+	if socialLogin.TokenExpiresAt != nil {
+		expiresAt = *socialLogin.TokenExpiresAt
+	}
+
+	if !expiresAt.IsZero() && time.Now().After(expiresAt) {
+		if refreshToken == "" {
+			return "", fmt.Errorf("Google token expired and no refresh token available")
+		}
+
+		newToken, err := service.refreshGoogleToken(ctx, refreshToken)
+		if err != nil {
+			return "", fmt.Errorf("failed to refresh Google token: %w", err)
+		}
+
+		expiresAtTime := newToken.ExpiresAt
+		socialLogin.AccessToken = &newToken.AccessToken
+		if newToken.RefreshToken != "" {
+			socialLogin.RefreshToken = &newToken.RefreshToken
+		}
+		socialLogin.TokenExpiresAt = &expiresAtTime
+		socialLogin.LastLoginAt = &expiresAtTime
+
+		if err := service.repo.SaveOrUpdateSocialLogin(ctx, socialLogin); err != nil {
+			logger.Error("AuthService:getGoogleTokenForUser:SaveOrUpdateSocialLogin:Error", "error", err)
+			return "", fmt.Errorf("failed to update refreshed token: %w", err)
+		}
+
+		return newToken.AccessToken, nil
+	}
+
+	return accessToken, nil
 }
 
-// refreshGoogleToken refreshes an expired Google access token
 func (service *AuthService) refreshGoogleToken(ctx context.Context, refreshToken string) (*GoogleToken, error) {
 	cfg, ok := config.GetSafe()
 	if !ok {
@@ -213,4 +256,3 @@ func (service *AuthService) refreshGoogleToken(ctx context.Context, refreshToken
 		ExpiresAt:    newToken.Expiry,
 	}, nil
 }
-

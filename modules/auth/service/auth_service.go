@@ -16,6 +16,8 @@ import (
 	"net/http"
 
 	"time"
+
+	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
@@ -538,7 +540,7 @@ func (service *AuthService) GetGoogleAuthURL(ctx context.Context) (string, *erro
 		logger.Error("AuthService:GetGoogleAuthURL:SaveOAuthState:Error", "error", err, "state", state)
 		return "", errors.NewAppError(errors.ErrInternalServer, "failed to store state token in database", err)
 	}
-	
+
 	logger.Info("AuthService:GetGoogleAuthURL:StateStored", "state", state, "expires_at", expiresAt)
 
 	authURL := oauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.ApprovalForce)
@@ -553,7 +555,7 @@ func (service *AuthService) HandleGoogleCallback(ctx context.Context, code strin
 		logger.Error("AuthService:HandleGoogleCallback:GetOAuthState:Error", "error", err, "state", state)
 		return nil, errors.NewAppError(errors.ErrInternalServer, "failed to validate state token", err)
 	}
-	
+
 	if oauthState == nil {
 		logger.Error("AuthService:HandleGoogleCallback:StateNotFound", "state", state)
 		return nil, errors.NewAppError(errors.ErrUnauthorized, "invalid or expired state token. Please initiate OAuth flow again by visiting /api/v1/public/auth/google", nil)
@@ -609,8 +611,7 @@ func (service *AuthService) HandleGoogleCallback(ctx context.Context, code strin
 	}
 
 	if user == nil {
-		// Create new user if doesn't exist
-		hashedPassword, _ := utils.HashPassword(utils.GenerateRandomString(32)) // Random password for OAuth users
+		hashedPassword, _ := utils.HashPassword(utils.GenerateRandomString(32))
 		username := userInfo.Name
 		newUser := &entity.User{
 			Email:    &userInfo.Email,
@@ -626,19 +627,49 @@ func (service *AuthService) HandleGoogleCallback(ctx context.Context, code strin
 		user = createdUser
 	}
 
-	// Save Google tokens for later use (Calendar API, etc.)
-	googleToken := &GoogleToken{
-		AccessToken:  token.AccessToken,
-		RefreshToken: token.RefreshToken,
-		ExpiresAt:    token.Expiry,
+	provider, err := service.repo.GetOAuthProviderByName(ctx, "google")
+	if err != nil {
+		logger.Error("AuthService:HandleGoogleCallback:GetOAuthProviderByName:Error:", err)
+		return nil, errors.NewAppError(errors.ErrInternalServer, "failed to get Google provider", err)
 	}
-	service.googleTokens[user.ID] = googleToken
-	
-	logger.Info("AuthService:HandleGoogleCallback:GoogleTokensSaved", 
-		"user_id", user.ID, 
-		"has_access_token", googleToken.AccessToken != "",
-		"has_refresh_token", googleToken.RefreshToken != "",
-		"expires_at", googleToken.ExpiresAt)
+	if provider == nil {
+		logger.Error("AuthService:HandleGoogleCallback:ProviderNotFound", "provider", "google")
+		return nil, errors.NewAppError(errors.ErrInternalServer, "Google provider not found in database", nil)
+	}
+
+	providerUserID := uuid.New()
+	if userInfo.ID != "" {
+		hashed := uuid.NewSHA1(uuid.NameSpaceOID, []byte("google:"+userInfo.ID))
+		providerUserID = hashed
+	}
+	providerUsername := userInfo.Name
+	providerEmail := userInfo.Email
+	expiresAt := token.Expiry
+	now := time.Now()
+
+	socialLogin := &entity.SocialLogin{
+		UserID:           user.ID,
+		ProviderID:       provider.ID,
+		ProviderUserID:   providerUserID,
+		ProviderUsername: &providerUsername,
+		ProviderEmail:    &providerEmail,
+		AccessToken:      &token.AccessToken,
+		RefreshToken:     &token.RefreshToken,
+		TokenExpiresAt:   &expiresAt,
+		LastLoginAt:      &now,
+		IsActive:         true,
+	}
+
+	if err := service.repo.SaveOrUpdateSocialLogin(ctx, socialLogin); err != nil {
+		logger.Error("AuthService:HandleGoogleCallback:SaveOrUpdateSocialLogin:Error:", err)
+		return nil, errors.NewAppError(errors.ErrInternalServer, "failed to save Google tokens", err)
+	}
+
+	logger.Info("AuthService:HandleGoogleCallback:GoogleTokensSaved",
+		"user_id", user.ID,
+		"has_access_token", token.AccessToken != "",
+		"has_refresh_token", token.RefreshToken != "",
+		"expires_at", expiresAt)
 
 	// Generate JWT tokens
 	accessToken, err := utils.GenerateToken(user.ID, user.Email, user.Username, constants.ScopeTokenAccess)

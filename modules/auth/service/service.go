@@ -14,12 +14,10 @@ import (
 )
 
 type AuthService struct {
-	repo         repository.AuthRepositoryInterface
-	cache        cache.Cache
-	googleTokens map[uuid.UUID]*GoogleToken
+	repo repository.AuthRepositoryInterface
+	cache cache.Cache
 }
 
-// GoogleToken stores Google OAuth tokens
 type GoogleToken struct {
 	AccessToken  string
 	RefreshToken string
@@ -28,9 +26,8 @@ type GoogleToken struct {
 
 func NewAuthService(repo repository.AuthRepositoryInterface, cache cache.Cache) AuthServiceInterface {
 	return &AuthService{
-		repo:         repo,
-		cache:        cache,
-		googleTokens: make(map[uuid.UUID]*GoogleToken),
+		repo:  repo,
+		cache: cache,
 	}
 }
 
@@ -76,6 +73,6 @@ type AuthServiceInterface interface {
 	HandleGoogleCallback(ctx context.Context, code string, state string) (*dto.LoginResponse, *errors.AppError)
 
 	// Google Calendar methods
-	GetGoogleCalendarEvents(ctx context.Context, userID uuid.UUID, timeMin string, timeMax string) ([]GoogleCalendarEvent, *errors.AppError)
-	GetGoogleCalendarList(ctx context.Context, userID uuid.UUID) ([]GoogleCalendar, *errors.AppError)
+	GetGoogleCalendarEvents(ctx context.Context, userID uuid.UUID, timeMin string, timeMax string) ([]dto.GoogleCalendarEvent, *errors.AppError)
+	GetGoogleCalendarList(ctx context.Context, userID uuid.UUID, params params.QueryParams) (*dto.PaginatedGoogleCalendarDTO, *errors.AppError)
 }
