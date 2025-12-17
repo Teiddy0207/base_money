@@ -438,6 +438,7 @@ func (service *AuthService) Register(ctx context.Context, requestData *dto.Regis
 	userEntity := &entity.User{
 		Phone:    requestData.Phone,
 		Password: hashedPassword,
+		IsActive: true, // Set default to true for new users
 	}
 
 	// Save user to database
@@ -615,8 +616,16 @@ func (service *AuthService) HandleGoogleCallback(ctx context.Context, code strin
 		username := userInfo.Name
 		newUser := &entity.User{
 			Email:    &userInfo.Email,
-			Username: &username,
+			Phone:    "", // Empty string for Google login users
+			Username:  &username,
 			Password: hashedPassword,
+			IsActive: true, // Set default to true for new users
+		}
+
+		// Mark email as verified if Google says it's verified
+		if userInfo.VerifiedEmail {
+			now := time.Now()
+			newUser.EmailVerifiedAt = &now
 		}
 
 		createdUser, errCreate := service.repo.CreateUser(ctx, newUser)
@@ -733,4 +742,183 @@ type GoogleUserInfo struct {
 	FamilyName    string `json:"family_name"`
 	Picture       string `json:"picture"`
 	Locale        string `json:"locale"`
+}
+
+// GoogleTokenInfo represents the response from Google's tokeninfo API
+type GoogleTokenInfo struct {
+	Iss           string `json:"iss"`
+	Azp           string `json:"azp"`
+	Aud           string `json:"aud"`
+	Sub           string `json:"sub"`
+	Email         string `json:"email"`
+	EmailVerified string `json:"email_verified"`
+	Name          string `json:"name"`
+	Picture       string `json:"picture"`
+	GivenName     string `json:"given_name"`
+	FamilyName    string `json:"family_name"`
+	Iat           string `json:"iat"`
+	Exp           string `json:"exp"`
+	Alg           string `json:"alg"`
+	Kid           string `json:"kid"`
+}
+
+// VerifyGoogleIdToken verifies Google idToken and returns login response
+func (service *AuthService) VerifyGoogleIdToken(ctx context.Context, idToken string) (*dto.LoginResponse, *errors.AppError) {
+	cfg, ok := config.GetSafe()
+	if !ok {
+		return nil, errors.NewAppError(errors.ErrInternalServer, "config not initialized", nil)
+	}
+
+	if cfg.GoogleAPI.ClientID == "" {
+		return nil, errors.NewAppError(errors.ErrInternalServer, "Google OAuth configuration is missing", nil)
+	}
+
+	// Verify token using Google's tokeninfo API
+	tokenInfo, err := service.verifyGoogleTokenInfo(ctx, idToken, cfg.GoogleAPI.ClientID)
+	if err != nil {
+		logger.Error("AuthService:VerifyGoogleIdToken:VerifyGoogleTokenInfo:Error:", err)
+		return nil, errors.NewAppError(errors.ErrUnauthorized, "invalid Google idToken", err)
+	}
+
+	// Convert token info to GoogleUserInfo format
+	userInfo := &GoogleUserInfo{
+		ID:            tokenInfo.Sub,
+		Email:         tokenInfo.Email,
+		VerifiedEmail: tokenInfo.EmailVerified == "true",
+		Name:          tokenInfo.Name,
+		GivenName:     tokenInfo.GivenName,
+		FamilyName:    tokenInfo.FamilyName,
+		Picture:       tokenInfo.Picture,
+	}
+
+	// Find or create user
+	user, errGet := service.repo.GetUserByIdentifier(ctx, userInfo.Email)
+	if errGet != nil {
+		logger.Error("AuthService:VerifyGoogleIdToken:GetUserByIdentifier:Error:", errGet)
+		return nil, errors.NewAppError(errors.ErrInternalServer, "failed to get user", errGet)
+	}
+
+	if user == nil {
+		hashedPassword, _ := utils.HashPassword(utils.GenerateRandomString(32))
+		username := userInfo.Name
+		if username == "" {
+			username = userInfo.Email
+		}
+		newUser := &entity.User{
+			Email:    &userInfo.Email,
+			Phone:    "", // Empty string for Google login users
+			Username:  &username,
+			Password: hashedPassword,
+			IsActive: true, // Set default to true for new users
+		}
+
+		// Mark email as verified if Google says it's verified
+		if userInfo.VerifiedEmail {
+			now := time.Now()
+			newUser.EmailVerifiedAt = &now
+		}
+
+		createdUser, errCreate := service.repo.CreateUser(ctx, newUser)
+		if errCreate != nil {
+			logger.Error("AuthService:VerifyGoogleIdToken:CreateUser:Error:", errCreate)
+			return nil, errors.NewAppError(errors.ErrInternalServer, "failed to create user", errCreate)
+		}
+		user = createdUser
+	}
+
+	// Get or create Google provider
+	provider, err := service.repo.GetOAuthProviderByName(ctx, "google")
+	if err != nil {
+		logger.Error("AuthService:VerifyGoogleIdToken:GetOAuthProviderByName:Error:", err)
+		return nil, errors.NewAppError(errors.ErrInternalServer, "failed to get Google provider", err)
+	}
+	if provider == nil {
+		logger.Error("AuthService:VerifyGoogleIdToken:ProviderNotFound", "provider", "google")
+		return nil, errors.NewAppError(errors.ErrInternalServer, "Google provider not found in database", nil)
+	}
+
+	// Save or update social login (without access token since we only have idToken)
+	providerUserID := uuid.New()
+	if userInfo.ID != "" {
+		hashed := uuid.NewSHA1(uuid.NameSpaceOID, []byte("google:"+userInfo.ID))
+		providerUserID = hashed
+	}
+	providerUsername := userInfo.Name
+	providerEmail := userInfo.Email
+	now := time.Now()
+
+	socialLogin := &entity.SocialLogin{
+		UserID:           user.ID,
+		ProviderID:       provider.ID,
+		ProviderUserID:   providerUserID,
+		ProviderUsername: &providerUsername,
+		ProviderEmail:    &providerEmail,
+		LastLoginAt:      &now,
+		IsActive:         true,
+	}
+
+	if err := service.repo.SaveOrUpdateSocialLogin(ctx, socialLogin); err != nil {
+		logger.Error("AuthService:VerifyGoogleIdToken:SaveOrUpdateSocialLogin:Error:", err)
+		return nil, errors.NewAppError(errors.ErrInternalServer, "failed to save Google login", err)
+	}
+
+	// Generate JWT tokens
+	accessToken, err := utils.GenerateToken(user.ID, user.Email, user.Username, constants.ScopeTokenAccess)
+	if err != nil {
+		logger.Error("AuthService:VerifyGoogleIdToken:GenerateAccessToken:Error:", err)
+		return nil, errors.NewAppError(errors.ErrInternalServer, "failed to generate access token", err)
+	}
+
+	refreshToken, err := utils.GenerateToken(user.ID, user.Email, user.Username, constants.ScopeTokenRefresh)
+	if err != nil {
+		logger.Error("AuthService:VerifyGoogleIdToken:GenerateRefreshToken:Error:", err)
+		return nil, errors.NewAppError(errors.ErrInternalServer, "failed to generate refresh token", err)
+	}
+
+	return &dto.LoginResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}, nil
+}
+
+// verifyGoogleTokenInfo verifies Google idToken using tokeninfo API
+func (service *AuthService) verifyGoogleTokenInfo(ctx context.Context, idToken, clientID string) (*GoogleTokenInfo, error) {
+	url := fmt.Sprintf("https://oauth2.googleapis.com/tokeninfo?id_token=%s", idToken)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to verify token: %s", string(body))
+	}
+
+	var tokenInfo GoogleTokenInfo
+	if err := json.Unmarshal(body, &tokenInfo); err != nil {
+		return nil, err
+	}
+
+	// Verify audience matches client ID
+	if tokenInfo.Aud != clientID {
+		return nil, fmt.Errorf("token audience does not match client ID")
+	}
+
+	// Verify issuer
+	if tokenInfo.Iss != "https://accounts.google.com" && tokenInfo.Iss != "accounts.google.com" {
+		return nil, fmt.Errorf("invalid token issuer")
+	}
+
+	return &tokenInfo, nil
 }

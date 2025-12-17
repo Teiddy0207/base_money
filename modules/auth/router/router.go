@@ -40,6 +40,7 @@ func (r *AuthRouter) Setup(e *echo.Echo, middleware *middleware.Middleware) {
 	authPublicRoutes.GET("/google", r.AuthController.GoogleAuth)
 	authPublicRoutes.GET("/google/info", r.AuthController.GoogleAuthInfo) // Debug endpoint
 	authPublicRoutes.GET("/google/callback", r.AuthController.GoogleCallback)
+	authPublicRoutes.POST("/google/verify", r.AuthController.GoogleVerify)
 
 	// Google Calendar routes (protected)
 	authPublicRoutes.GET("/google/calendar/events", r.AuthController.GetGoogleCalendarEvents, middleware.AuthMiddleware())

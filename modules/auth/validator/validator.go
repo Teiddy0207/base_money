@@ -230,3 +230,17 @@ func ValidateIdentifier(identifier string) *validation.ValidationResult {
 
 	return result
 }
+
+func ValidateGoogleVerifyRequest(req *dto.GoogleVerifyRequest) *validation.ValidationResult {
+	if req == nil {
+		return nil
+	}
+
+	result := validation.NewValidationResult()
+
+	if utils.IsEmpty(req.IdToken) {
+		result.AddError("idToken", "IdToken is required")
+	}
+
+	return result
+}

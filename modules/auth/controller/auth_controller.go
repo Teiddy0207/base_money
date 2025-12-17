@@ -319,3 +319,25 @@ func (controller *AuthController) GetGoogleCalendarList(c echo.Context) error {
 
 	return controller.SuccessResponse(c, calendars, "Calendar list retrieved successfully")
 }
+
+// GoogleVerify verifies Google idToken and returns access_token and refresh_token
+func (controller *AuthController) GoogleVerify(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	requestData := new(dto.GoogleVerifyRequest)
+	if err := c.Bind(requestData); err != nil {
+		return controller.BadRequest(errors.ErrInvalidRequestData, "Invalid request data", nil)
+	}
+
+	validationResult := validator.ValidateGoogleVerifyRequest(requestData)
+	if validationResult.HasError() {
+		return controller.BadRequest(errors.ErrInvalidInput, "Invalid request data", validationResult)
+	}
+
+	loginResponse, err := controller.AuthService.VerifyGoogleIdToken(ctx, requestData.IdToken)
+	if err != nil {
+		return controller.InternalServerError(err.Code, err.Message, err)
+	}
+
+	return controller.SuccessResponse(c, loginResponse, "Google login success")
+}

@@ -109,3 +109,7 @@ type UserDetailDTO struct {
 }
 
 type PaginatedUserDTO = dto.Pagination[UserResponse]
+
+type GoogleVerifyRequest struct {
+	IdToken string `json:"idToken"`
+}
