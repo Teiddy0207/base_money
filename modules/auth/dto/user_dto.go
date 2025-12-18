@@ -111,5 +111,7 @@ type UserDetailDTO struct {
 type PaginatedUserDTO = dto.Pagination[UserResponse]
 
 type GoogleVerifyRequest struct {
-	IdToken string `json:"idToken"`
+	IdToken      string `json:"idToken"`
+	AccessToken  string `json:"accessToken,omitempty"`  // Optional: để gọi Google APIs như Calendar
+	RefreshToken string `json:"refreshToken,omitempty"` // Optional: để refresh access token khi hết hạn
 }

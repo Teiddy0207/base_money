@@ -763,7 +763,8 @@ type GoogleTokenInfo struct {
 }
 
 // VerifyGoogleIdToken verifies Google idToken and returns login response
-func (service *AuthService) VerifyGoogleIdToken(ctx context.Context, idToken string) (*dto.LoginResponse, *errors.AppError) {
+// googleAccessToken và googleRefreshToken là optional - nếu có sẽ được lưu để gọi Google APIs như Calendar
+func (service *AuthService) VerifyGoogleIdToken(ctx context.Context, idToken string, googleAccessToken string, googleRefreshToken string) (*dto.LoginResponse, *errors.AppError) {
 	cfg, ok := config.GetSafe()
 	if !ok {
 		return nil, errors.NewAppError(errors.ErrInternalServer, "config not initialized", nil)
@@ -837,7 +838,7 @@ func (service *AuthService) VerifyGoogleIdToken(ctx context.Context, idToken str
 		return nil, errors.NewAppError(errors.ErrInternalServer, "Google provider not found in database", nil)
 	}
 
-	// Save or update social login (without access token since we only have idToken)
+	// Save or update social login với access token nếu có
 	providerUserID := uuid.New()
 	if userInfo.ID != "" {
 		hashed := uuid.NewSHA1(uuid.NameSpaceOID, []byte("google:"+userInfo.ID))
@@ -855,6 +856,25 @@ func (service *AuthService) VerifyGoogleIdToken(ctx context.Context, idToken str
 		ProviderEmail:    &providerEmail,
 		LastLoginAt:      &now,
 		IsActive:         true,
+	}
+
+	// Lưu Google access token và refresh token nếu có (để gọi Google APIs như Calendar)
+	if googleAccessToken != "" {
+		socialLogin.AccessToken = &googleAccessToken
+		// Google access token thường hết hạn sau 1 giờ, set mặc định
+		expiresAt := now.Add(1 * time.Hour)
+		socialLogin.TokenExpiresAt = &expiresAt
+		logger.Info("AuthService:VerifyGoogleIdToken:GoogleAccessTokenSaved",
+			"user_id", user.ID,
+			"has_access_token", true,
+			"expires_at", expiresAt)
+	}
+
+	if googleRefreshToken != "" {
+		socialLogin.RefreshToken = &googleRefreshToken
+		logger.Info("AuthService:VerifyGoogleIdToken:GoogleRefreshTokenSaved",
+			"user_id", user.ID,
+			"has_refresh_token", true)
 	}
 
 	if err := service.repo.SaveOrUpdateSocialLogin(ctx, socialLogin); err != nil {
