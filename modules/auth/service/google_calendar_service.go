@@ -21,7 +21,7 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-func (service *AuthService) GetGoogleCalendarEvents(ctx context.Context, userID uuid.UUID, timeMin string, timeMax string) ([]dto.GoogleCalendarEvent, *errors.AppError) {
+func (service *AuthService) GetGoogleCalendarEvents(ctx context.Context, userID uuid.UUID, params params.QueryParams, timeMin string, timeMax string) (*dto.PaginatedGoogleCalendarEventDTO, *errors.AppError) {
 	ctx, cancel := context.WithTimeout(ctx, constants.DefaultTimeout)
 	defer cancel()
 
@@ -32,12 +32,26 @@ func (service *AuthService) GetGoogleCalendarEvents(ctx context.Context, userID 
 	}
 
 	apiURL := service.buildCalendarEventsURL(timeMin, timeMax)
-	events, appErr := service.fetchGoogleCalendarEvents(ctx, apiURL, googleToken)
+	allEvents, appErr := service.fetchGoogleCalendarEvents(ctx, apiURL, googleToken)
 	if appErr != nil {
 		return nil, appErr
 	}
 
-	return mapper.ToGoogleCalendarEventsDTO(events), nil
+	totalItems := len(allEvents)
+	offset := (params.PageNumber - 1) * params.PageSize
+	end := offset + params.PageSize
+
+	if offset > totalItems {
+		return mapper.ToPaginatedGoogleCalendarEventsDTO([]dto.GoogleCalendarEvent{}, totalItems, params.PageNumber, params.PageSize), nil
+	}
+
+	if end > totalItems {
+		end = totalItems
+	}
+
+	paginatedItems := allEvents[offset:end]
+
+	return mapper.ToPaginatedGoogleCalendarEventsDTO(paginatedItems, totalItems, params.PageNumber, params.PageSize), nil
 }
 
 func (service *AuthService) GetGoogleCalendarList(ctx context.Context, userID uuid.UUID, params params.QueryParams) (*dto.PaginatedGoogleCalendarDTO, *errors.AppError) {

@@ -74,6 +74,6 @@ type AuthServiceInterface interface {
 	VerifyGoogleIdToken(ctx context.Context, idToken string, googleAccessToken string, googleRefreshToken string) (*dto.LoginResponse, *errors.AppError)
 
 	// Google Calendar methods
-	GetGoogleCalendarEvents(ctx context.Context, userID uuid.UUID, timeMin string, timeMax string) ([]dto.GoogleCalendarEvent, *errors.AppError)
+	GetGoogleCalendarEvents(ctx context.Context, userID uuid.UUID, params params.QueryParams, timeMin string, timeMax string) (*dto.PaginatedGoogleCalendarEventDTO, *errors.AppError)
 	GetGoogleCalendarList(ctx context.Context, userID uuid.UUID, params params.QueryParams) (*dto.PaginatedGoogleCalendarDTO, *errors.AppError)
 }

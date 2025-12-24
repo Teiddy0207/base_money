@@ -35,3 +35,4 @@ type GoogleCalendarBusyResponse struct {
 }
 
 type PaginatedGoogleCalendarDTO = dto.Pagination[GoogleCalendar]
+type PaginatedGoogleCalendarEventDTO = dto.Pagination[GoogleCalendarEvent]

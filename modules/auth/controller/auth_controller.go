@@ -284,10 +284,11 @@ func (controller *AuthController) GetGoogleCalendarEvents(c echo.Context) error 
 	userID := tokenData.UserID
 
 	// Get query parameters
+	queryParams := params.NewQueryParams(c)
 	timeMin := c.QueryParam("time_min")
 	timeMax := c.QueryParam("time_max")
 
-	events, appErr := controller.AuthService.GetGoogleCalendarEvents(ctx, userID, timeMin, timeMax)
+	events, appErr := controller.AuthService.GetGoogleCalendarEvents(ctx, userID, *queryParams, timeMin, timeMax)
 	if appErr != nil {
 		return controller.InternalServerError(appErr.Code, appErr.Message, appErr)
 	}
