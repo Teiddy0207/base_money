@@ -239,3 +239,16 @@ func ValidateWishlistRequest(req *dto.WishlistRequest) *validation.ValidationRes
 
 	return result
 }
+
+func ValidateGroupRequest(req *dto.GroupRequest) *validation.ValidationResult {
+	if req == nil {
+		return nil
+	}
+	result := validation.NewValidationResult()
+
+	if utils.IsEmpty(req.Name) {
+		result.AddError("name", "Name is required")
+	}
+
+	return result
+}

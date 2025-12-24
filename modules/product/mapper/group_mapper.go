@@ -1,0 +1,57 @@
+package mapper
+
+import (
+	"go-api-starter/modules/product/dto"
+	"go-api-starter/modules/product/entity"
+)
+
+func ToGroupEntity(req *dto.GroupRequest) *entity.Group {
+	return &entity.Group{
+		Name:        req.Name,
+		Slug:        req.Slug,
+		Description: req.Description,
+		Thumbnail:   req.Thumbnail,
+		SortOrder:   req.SortOrder,
+		IsActive:    req.IsActive,
+	}
+}
+
+func ToGroupResponse(entity *entity.Group) *dto.GroupResponse {
+	response := &dto.GroupResponse{
+		ID:          entity.ID,
+		Name:        entity.Name,
+		Slug:        entity.Slug,
+		Description: entity.Description,
+		Thumbnail:   entity.Thumbnail,
+		SortOrder:   entity.SortOrder,
+		IsActive:    entity.IsActive,
+		CreatedAt:   entity.CreatedAt,
+		UpdatedAt:   entity.UpdatedAt,
+	}
+
+	return response
+}
+
+func ToGroupPaginationResponse(entity *entity.PaginatedGroupResponse) *dto.PaginatedGroupResponse {
+	// Convert từng group entity sang group response
+	groupResponses := make([]dto.GroupResponse, len(entity.Items))
+	for i, group := range entity.Items {
+		groupResponses[i] = *ToGroupResponse(&group)
+	}
+
+	// Tính total pages
+	totalPages := 0
+	if entity.PageSize > 0 {
+		totalPages = (entity.TotalItems + entity.PageSize - 1) / entity.PageSize
+	}
+
+	return &dto.PaginatedGroupResponse{
+		Items:      groupResponses,
+		TotalItems: entity.TotalItems,
+		TotalPages: totalPages,
+		PageNumber: entity.PageNumber,
+		PageSize:   entity.PageSize,
+	}
+}
+
+

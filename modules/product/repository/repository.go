@@ -26,6 +26,12 @@ type ProductRepositoryInterface interface {
 	PrivateUpdateCategory(ctx context.Context, category *entity.Category, id uuid.UUID) error
 	PrivateDeleteCategory(ctx context.Context, id uuid.UUID) error
 
+	PrivateCreateGroup(ctx context.Context, group *entity.Group) error
+	PrivateGetGroupById(ctx context.Context, id uuid.UUID) (*entity.Group, error)
+	PrivateGetGroups(ctx context.Context, params params.QueryParams) (*entity.PaginatedGroupResponse, error)
+	PrivateUpdateGroup(ctx context.Context, group *entity.Group, id uuid.UUID) error
+	PrivateDeleteGroup(ctx context.Context, id uuid.UUID) error
+
 	PrivateCreateBrand(ctx context.Context, brand *entity.Brand) error
 	PrivateGetBrandById(ctx context.Context, id uuid.UUID) (*entity.Brand, error)
 	PrivateGetBrands(ctx context.Context, params params.QueryParams) (*entity.PaginatedBrandResponse, error)
