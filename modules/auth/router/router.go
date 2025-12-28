@@ -47,7 +47,7 @@ func (r *AuthRouter) Setup(e *echo.Echo, middleware *middleware.Middleware) {
 	authPublicRoutes.GET("/google/calendar/list", r.AuthController.GetGoogleCalendarList, middleware.AuthMiddleware())
 
 	authPublicRoutes.POST("/update-password", r.AuthController.ChangePassword, middleware.AuthMiddleware())
-	authPublicRoutes.PUT("user-profile", r.AuthController.UpdateUserProfile, middleware.AuthMiddleware())
+	authPublicRoutes.PUT("/user-profile", r.AuthController.UpdateUserProfile, middleware.AuthMiddleware())
 
 	authRoutes.POST("/roles", r.AuthController.PrivateCreateRole, middleware.AuthMiddleware(), middleware.PermissionMiddleware())
 	authRoutes.GET("/roles", r.AuthController.PrivateGetRoles, middleware.AuthMiddleware(), middleware.PermissionMiddleware())
