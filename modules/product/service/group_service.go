@@ -89,17 +89,6 @@ func (s *ProductService) PublicGetGroups(ctx context.Context, params params.Quer
 	if err != nil {
 		return nil, errors.NewAppError(errors.ErrGetFailed, "get groups failed", err)
 	}
-	
-	if groups == nil {
-		return &dto.PaginatedGroupResponse{
-			Items:      []dto.GroupResponse{},
-			TotalItems: 0,
-			TotalPages: 0,
-			PageNumber: params.PageNumber,
-			PageSize:   params.PageSize,
-		}, nil
-	}
-	
 	return mapper.ToGroupPaginationResponse(groups), nil
 }
 
@@ -120,6 +109,3 @@ func (s *ProductService) PublicGetGroupById(ctx context.Context, id uuid.UUID) (
 	}
 	return mapper.ToGroupResponse(group), nil
 }
-
-
-
