@@ -105,4 +105,17 @@ func (controller *ProductController) PublicGetGroups(c echo.Context) error {
 	return controller.SuccessResponse(c, groups, "get groups success")
 }
 
+func (controller *ProductController) PublicGetGroupById(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	groupId := utils.ToUUID(c.Param("id"))
+
+	group, errGet := controller.ProductService.PublicGetGroupById(ctx, groupId)
+	if errGet != nil {
+		return controller.ErrorResponse(c, errGet)
+	}
+
+	return controller.SuccessResponse(c, group, "get group success")
+}
+
 

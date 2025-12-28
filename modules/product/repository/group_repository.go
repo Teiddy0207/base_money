@@ -14,8 +14,8 @@ import (
 
 func (r *ProductRepository) PrivateCreateGroup(ctx context.Context, group *entity.Group) error {
 	query := `
-		INSERT INTO groups (name, slug, description, thumbnail, sort_order, is_active)
-		VALUES (:name, :slug, :description, :thumbnail, :sort_order, :is_active)
+		INSERT INTO groups (name, description)
+		VALUES (:name, :description)
 	`
 	_, err := r.DB.NamedExecContext(ctx, query, group)
 	if err != nil {
@@ -31,18 +31,13 @@ func (r *ProductRepository) PrivateCreateGroup(ctx context.Context, group *entit
 func (r *ProductRepository) PrivateUpdateGroup(ctx context.Context, group *entity.Group, id uuid.UUID) error {
 	query := `
 		UPDATE groups
-		SET name = $1, slug = $2, description = $3, thumbnail = $4, 
-		    sort_order = $5, is_active = $6, updated_at = now()
-		WHERE id = $7
+		SET name = $1, description = $2, updated_at = now()
+		WHERE id = $3
 	`
 
 	result, err := r.DB.SQLx().ExecContext(ctx, query,
 		group.Name,
-		group.Slug,
 		group.Description,
-		group.Thumbnail,
-		group.SortOrder,
-		group.IsActive,
 		id,
 	)
 
@@ -84,11 +79,7 @@ func (r *ProductRepository) PrivateGetGroupById(ctx context.Context, id uuid.UUI
 		SELECT 
 			id, 
 			name, 
-			slug, 
 			description, 
-			thumbnail, 
-			sort_order, 
-			is_active, 
 			created_at, 
 			updated_at
 		FROM groups
@@ -147,15 +138,11 @@ func (r *ProductRepository) PrivateGetGroups(ctx context.Context, params params.
 		SELECT 
 			id, 
 			name, 
-			slug, 
 			description, 
-			thumbnail, 
-			sort_order, 
-			is_active, 
 			created_at, 
 			updated_at
 	` + baseQuery + whereClause + `
-		ORDER BY sort_order ASC, created_at DESC
+		ORDER BY created_at DESC
 		LIMIT $` + fmt.Sprintf("%d", argIndex) + ` OFFSET $` + fmt.Sprintf("%d", argIndex+1)
 
 	// Thêm params cho pagination

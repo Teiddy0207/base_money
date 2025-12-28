@@ -8,11 +8,7 @@ import (
 func ToGroupEntity(req *dto.GroupRequest) *entity.Group {
 	return &entity.Group{
 		Name:        req.Name,
-		Slug:        req.Slug,
 		Description: req.Description,
-		Thumbnail:   req.Thumbnail,
-		SortOrder:   req.SortOrder,
-		IsActive:    req.IsActive,
 	}
 }
 
@@ -20,11 +16,7 @@ func ToGroupResponse(entity *entity.Group) *dto.GroupResponse {
 	response := &dto.GroupResponse{
 		ID:          entity.ID,
 		Name:        entity.Name,
-		Slug:        entity.Slug,
 		Description: entity.Description,
-		Thumbnail:   entity.Thumbnail,
-		SortOrder:   entity.SortOrder,
-		IsActive:    entity.IsActive,
 		CreatedAt:   entity.CreatedAt,
 		UpdatedAt:   entity.UpdatedAt,
 	}

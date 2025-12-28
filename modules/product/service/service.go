@@ -87,8 +87,8 @@ type ProductServiceInterface interface {
 	PrivateGetOrderById(ctx context.Context, id uuid.UUID) (*dto.OrderResponse, error)
 	PrivateGetOrderDetailWithItems(ctx context.Context, orderID uuid.UUID) (*dto.OrderDetailWithItemsDTO, error)
 
-	// Public
 	PublicGetGroups(ctx context.Context, params params.QueryParams) (*dto.PaginatedGroupResponse, *errors.AppError)
+	PublicGetGroupById(ctx context.Context, id uuid.UUID) (*dto.GroupResponse, *errors.AppError)
 
 	PublicGetProductDetail(ctx context.Context, slug string) (*dto.ProductDetailResponse, *errors.AppError)
 	PublicGetProductDetailWithFields(ctx context.Context, id uuid.UUID, field []string) (*dto.ProductDetailResponse, *errors.AppError)

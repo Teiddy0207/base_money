@@ -124,9 +124,6 @@ func (r *ProductRouter) Setup(e *echo.Echo, middleware *middleware.Middleware) {
 	publicProducts.GET("/orders/:id", r.ProductController.PublicGetOrderDetailWithItems, middleware.AuthMiddleware(), middleware.PermissionMiddleware())
 	publicProducts.GET("/items", r.ProductController.PublicGetProductsList)
 
-	// Groups routes - Lấy danh sách nhóm sản phẩm (public, không cần auth)
-	publicProducts.GET("/groups", r.ProductController.PublicGetGroups)
-
 	// Wishlist routes - Quản lý danh sách
 	publicProducts.POST("/wishlists", r.ProductController.PublicCreateWishlist, middleware.AuthMiddleware(), middleware.PermissionMiddleware())
 	publicProducts.GET("/wishlists", r.ProductController.PublicGetWishlists, middleware.AuthMiddleware(), middleware.PermissionMiddleware())
