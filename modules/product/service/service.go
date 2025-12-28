@@ -90,6 +90,12 @@ type ProductServiceInterface interface {
 	PublicGetGroups(ctx context.Context, params params.QueryParams) (*dto.PaginatedGroupResponse, *errors.AppError)
 	PublicGetGroupById(ctx context.Context, id uuid.UUID) (*dto.GroupResponse, *errors.AppError)
 
+	// UserGroup methods - Quản lý user trong group
+	PrivateAddUsersToGroup(ctx context.Context, req *dto.AddUsersToGroupRequest) *errors.AppError
+	PrivateRemoveUserFromGroup(ctx context.Context, req *dto.RemoveUserFromGroupRequest) *errors.AppError
+	PrivateGetUsersByGroupId(ctx context.Context, groupID uuid.UUID) (*dto.GroupUsersResponse, *errors.AppError)
+	PrivateGetGroupsByUserId(ctx context.Context, userID uuid.UUID) ([]dto.UserGroupResponse, *errors.AppError)
+
 	PublicGetProductDetail(ctx context.Context, slug string) (*dto.ProductDetailResponse, *errors.AppError)
 	PublicGetProductDetailWithFields(ctx context.Context, id uuid.UUID, field []string) (*dto.ProductDetailResponse, *errors.AppError)
 	PublicGetProducts(ctx context.Context, params params.QueryParams) (*dto.PaginatedProductDTO, *errors.AppError)
