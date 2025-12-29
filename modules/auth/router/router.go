@@ -46,6 +46,10 @@ func (r *AuthRouter) Setup(e *echo.Echo, middleware *middleware.Middleware) {
 	authPublicRoutes.GET("/google/calendar/events", r.AuthController.GetGoogleCalendarEvents, middleware.AuthMiddleware())
 	authPublicRoutes.GET("/google/calendar/list", r.AuthController.GetGoogleCalendarList, middleware.AuthMiddleware())
 
+	// Social Users search routes (protected)
+	authRoutes.GET("/users/search", r.AuthController.SearchSocialUsers, middleware.AuthMiddleware())
+	authRoutes.GET("/users/social", r.AuthController.GetAllSocialUsers, middleware.AuthMiddleware())
+
 	authPublicRoutes.POST("/update-password", r.AuthController.ChangePassword, middleware.AuthMiddleware())
 	authPublicRoutes.PUT("/user-profile", r.AuthController.UpdateUserProfile, middleware.AuthMiddleware())
 

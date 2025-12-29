@@ -76,4 +76,8 @@ type AuthServiceInterface interface {
 	// Google Calendar methods
 	GetGoogleCalendarEvents(ctx context.Context, userID uuid.UUID, params params.QueryParams, timeMin string, timeMax string) (*dto.PaginatedGoogleCalendarEventDTO, *errors.AppError)
 	GetGoogleCalendarList(ctx context.Context, userID uuid.UUID, params params.QueryParams) (*dto.PaginatedGoogleCalendarDTO, *errors.AppError)
+
+	// Social Users search methods
+	SearchSocialUsers(ctx context.Context, query string) ([]repository.SocialUserResult, error)
+	GetAllSocialUsers(ctx context.Context) ([]repository.SocialUserResult, error)
 }
