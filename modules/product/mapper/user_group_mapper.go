@@ -27,3 +27,38 @@ func ToUserGroupResponse(entity *entity.UserGroup) *dto.UserGroupResponse {
 	}
 }
 
+func ToUserGroupResponseWithRelations(relation *dto.UserGroupWithRelations) *dto.UserGroupResponse {
+	if relation == nil {
+		return nil
+	}
+
+	response := &dto.UserGroupResponse{
+		ID:        relation.ID,
+		UserID:    relation.UserID,
+		GroupID:   relation.GroupID,
+		CreatedAt: relation.CreatedAt,
+	}
+
+	
+	userID := relation.UserID 
+	if relation.UserIDFromUser != uuid.Nil {
+		userID = relation.UserIDFromUser 
+	}
+	
+	response.User = &dto.UserInfo{
+		ID:            userID, 
+		ProviderName:  relation.ProviderName,
+		ProviderEmail: relation.ProviderEmail,
+	}
+
+	if relation.GroupIDFromGroup != uuid.Nil {
+		response.Group = &dto.GroupInfo{
+			ID:          relation.GroupIDFromGroup,
+			Name:        relation.GroupName,
+			Description: relation.GroupDescription,
+		}
+	}
+
+	return response
+}
+

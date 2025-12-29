@@ -146,19 +146,30 @@ func (s *ProductService) PrivateGetUsersByGroupId(ctx context.Context, groupID u
 	ctx, cancel := context.WithTimeout(ctx, constants.DefaultRequestTimeout)
 	defer cancel()
 
-	userGroups, err := s.repo.PrivateGetUsersByGroupId(ctx, groupID)
+	userGroupsWithRelations, group, err := s.repo.PrivateGetUsersByGroupIdWithRelations(ctx, groupID)
 	if err != nil {
 		return nil, errors.NewAppError(errors.ErrGetFailed, "get users by group id failed", err)
 	}
 
-	// Convert entity to DTO
-	userResponses := make([]dto.UserGroupResponse, len(userGroups))
-	for i, ug := range userGroups {
-		userResponses[i] = *mapper.ToUserGroupResponse(&ug)
+	// Convert to DTO với dữ liệu quan hệ
+	userResponses := make([]dto.UserGroupResponse, len(userGroupsWithRelations))
+	for i, relation := range userGroupsWithRelations {
+		userResponses[i] = *mapper.ToUserGroupResponseWithRelations(&relation)
+	}
+
+	// Map Group info
+	var groupInfo *dto.GroupInfo
+	if group != nil {
+		groupInfo = &dto.GroupInfo{
+			ID:          group.ID,
+			Name:        group.Name,
+			Description: group.Description,
+		}
 	}
 
 	return &dto.GroupUsersResponse{
 		GroupID: groupID,
+		Group:   groupInfo,
 		Users:   userResponses,
 	}, nil
 }
