@@ -109,3 +109,74 @@ func (s *ProductService) PublicGetGroupById(ctx context.Context, id uuid.UUID) (
 	}
 	return mapper.ToGroupResponse(group), nil
 }
+
+// UserGroup service methods - Quản lý user trong group
+
+func (s *ProductService) PrivateAddUsersToGroup(ctx context.Context, req *dto.AddUsersToGroupRequest) *errors.AppError {
+	ctx, cancel := context.WithTimeout(ctx, constants.DefaultRequestTimeout)
+	defer cancel()
+
+	// Kiểm tra group có tồn tại không
+	_, err := s.repo.PrivateGetGroupById(ctx, req.GroupID)
+	if err != nil {
+		return errors.NewAppError(errors.ErrNotFound, "group not found", err)
+	}
+
+	err = s.repo.PrivateAddUsersToGroup(ctx, req.GroupID, req.UserIDs)
+	if err != nil {
+		return errors.NewAppError(errors.ErrCreateFailed, "add users to group failed", err)
+	}
+
+	return nil
+}
+
+func (s *ProductService) PrivateRemoveUserFromGroup(ctx context.Context, req *dto.RemoveUserFromGroupRequest) *errors.AppError {
+	ctx, cancel := context.WithTimeout(ctx, constants.DefaultRequestTimeout)
+	defer cancel()
+
+	err := s.repo.PrivateRemoveUserFromGroup(ctx, req.GroupID, req.UserID)
+	if err != nil {
+		return errors.NewAppError(errors.ErrDeleteFailed, "remove user from group failed", err)
+	}
+
+	return nil
+}
+
+func (s *ProductService) PrivateGetUsersByGroupId(ctx context.Context, groupID uuid.UUID) (*dto.GroupUsersResponse, *errors.AppError) {
+	ctx, cancel := context.WithTimeout(ctx, constants.DefaultRequestTimeout)
+	defer cancel()
+
+	userGroups, err := s.repo.PrivateGetUsersByGroupId(ctx, groupID)
+	if err != nil {
+		return nil, errors.NewAppError(errors.ErrGetFailed, "get users by group id failed", err)
+	}
+
+	// Convert entity to DTO
+	userResponses := make([]dto.UserGroupResponse, len(userGroups))
+	for i, ug := range userGroups {
+		userResponses[i] = *mapper.ToUserGroupResponse(&ug)
+	}
+
+	return &dto.GroupUsersResponse{
+		GroupID: groupID,
+		Users:   userResponses,
+	}, nil
+}
+
+func (s *ProductService) PrivateGetGroupsByUserId(ctx context.Context, userID uuid.UUID) ([]dto.UserGroupResponse, *errors.AppError) {
+	ctx, cancel := context.WithTimeout(ctx, constants.DefaultRequestTimeout)
+	defer cancel()
+
+	userGroups, err := s.repo.PrivateGetGroupsByUserId(ctx, userID)
+	if err != nil {
+		return nil, errors.NewAppError(errors.ErrGetFailed, "get groups by user id failed", err)
+	}
+
+	// Convert entity to DTO
+	groupResponses := make([]dto.UserGroupResponse, len(userGroups))
+	for i, ug := range userGroups {
+		groupResponses[i] = *mapper.ToUserGroupResponse(&ug)
+	}
+
+	return groupResponses, nil
+}

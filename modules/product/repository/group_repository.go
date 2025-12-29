@@ -169,4 +169,117 @@ func (r *ProductRepository) PrivateGetGroups(ctx context.Context, params params.
 	return response, nil
 }
 
+// UserGroup methods - Quản lý user trong group
+
+func (r *ProductRepository) PrivateAddUsersToGroup(ctx context.Context, groupID uuid.UUID, userIDs []uuid.UUID) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	// Sử dụng transaction để đảm bảo tính nhất quán
+	tx, err := r.DB.SQLx().BeginTxx(ctx, nil)
+	if err != nil {
+		logger.Error("ProductRepository:PrivateAddUsersToGroup - BeginTx", err)
+		return err
+	}
+	defer tx.Rollback()
+
+	// Insert từng user vào group (bỏ qua nếu đã tồn tại)
+	query := `
+		INSERT INTO user_groups (user_id, group_id, created_at)
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (user_id, group_id) DO NOTHING
+	`
+
+	for _, userID := range userIDs {
+		_, err := tx.ExecContext(ctx, query, userID, groupID)
+		if err != nil {
+			logger.Error("ProductRepository:PrivateAddUsersToGroup - Insert", err)
+			return err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		logger.Error("ProductRepository:PrivateAddUsersToGroup - Commit", err)
+		return err
+	}
+
+	return nil
+}
+
+func (r *ProductRepository) PrivateRemoveUserFromGroup(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error {
+	query := `
+		DELETE FROM user_groups
+		WHERE group_id = $1 AND user_id = $2
+	`
+
+	result, err := r.DB.SQLx().ExecContext(ctx, query, groupID, userID)
+	if err != nil {
+		logger.Error("ProductRepository:PrivateRemoveUserFromGroup", err)
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		logger.Error("ProductRepository:PrivateRemoveUserFromGroup - RowsAffected", err)
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("user %s is not in group %s", userID, groupID)
+	}
+
+	return nil
+}
+
+func (r *ProductRepository) PrivateGetUsersByGroupId(ctx context.Context, groupID uuid.UUID) ([]entity.UserGroup, error) {
+	query := `
+		SELECT 
+			id,
+			user_id,
+			group_id,
+			created_at
+		FROM user_groups
+		WHERE group_id = $1
+		ORDER BY created_at DESC
+	`
+
+	var userGroups []entity.UserGroup
+	err := r.DB.SelectContext(ctx, &userGroups, query, groupID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return []entity.UserGroup{}, nil
+		}
+		logger.Error("ProductRepository:PrivateGetUsersByGroupId", err)
+		return nil, err
+	}
+
+	return userGroups, nil
+}
+
+func (r *ProductRepository) PrivateGetGroupsByUserId(ctx context.Context, userID uuid.UUID) ([]entity.UserGroup, error) {
+	query := `
+		SELECT 
+			id,
+			user_id,
+			group_id,
+			created_at
+		FROM user_groups
+		WHERE user_id = $1
+		ORDER BY created_at DESC
+	`
+
+	var userGroups []entity.UserGroup
+	err := r.DB.SelectContext(ctx, &userGroups, query, userID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return []entity.UserGroup{}, nil
+		}
+		logger.Error("ProductRepository:PrivateGetGroupsByUserId", err)
+		return nil, err
+	}
+
+	return userGroups, nil
+}
+
 

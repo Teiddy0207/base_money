@@ -32,6 +32,12 @@ type ProductRepositoryInterface interface {
 	PrivateUpdateGroup(ctx context.Context, group *entity.Group, id uuid.UUID) error
 	PrivateDeleteGroup(ctx context.Context, id uuid.UUID) error
 
+	// UserGroup methods - Quản lý user trong group
+	PrivateAddUsersToGroup(ctx context.Context, groupID uuid.UUID, userIDs []uuid.UUID) error
+	PrivateRemoveUserFromGroup(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
+	PrivateGetUsersByGroupId(ctx context.Context, groupID uuid.UUID) ([]entity.UserGroup, error)
+	PrivateGetGroupsByUserId(ctx context.Context, userID uuid.UUID) ([]entity.UserGroup, error)
+
 	PrivateCreateBrand(ctx context.Context, brand *entity.Brand) error
 	PrivateGetBrandById(ctx context.Context, id uuid.UUID) (*entity.Brand, error)
 	PrivateGetBrands(ctx context.Context, params params.QueryParams) (*entity.PaginatedBrandResponse, error)

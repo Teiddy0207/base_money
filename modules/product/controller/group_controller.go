@@ -7,6 +7,7 @@ import (
 	"go-api-starter/modules/product/dto"
 	"go-api-starter/modules/product/validator"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
@@ -118,4 +119,73 @@ func (controller *ProductController) PublicGetGroupById(c echo.Context) error {
 	return controller.SuccessResponse(c, group, "get group success")
 }
 
+// UserGroup controller methods - Quản lý user trong group
+
+func (controller *ProductController) PrivateAddUsersToGroup(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	requestData := new(dto.AddUsersToGroupRequest)
+	if err := c.Bind(requestData); err != nil {
+		return controller.BadRequest(errors.ErrInvalidRequestData, "Invalid request data", nil)
+	}
+
+	validationResult := validator.ValidateAddUsersToGroupRequest(requestData)
+	if validationResult.HasError() {
+		return controller.BadRequest(errors.ErrInvalidInput, "Invalid request data", validationResult)
+	}
+
+	err := controller.ProductService.PrivateAddUsersToGroup(ctx, requestData)
+	if err != nil {
+		return controller.ErrorResponse(c, err)
+	}
+
+	return controller.SuccessResponse(c, nil, "add users to group success")
+}
+
+func (controller *ProductController) PrivateRemoveUserFromGroup(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	requestData := new(dto.RemoveUserFromGroupRequest)
+	if err := c.Bind(requestData); err != nil {
+		return controller.BadRequest(errors.ErrInvalidRequestData, "Invalid request data", nil)
+	}
+
+	validationResult := validator.ValidateRemoveUserFromGroupRequest(requestData)
+	if validationResult.HasError() {
+		return controller.BadRequest(errors.ErrInvalidInput, "Invalid request data", validationResult)
+	}
+
+	err := controller.ProductService.PrivateRemoveUserFromGroup(ctx, requestData)
+	if err != nil {
+		return controller.ErrorResponse(c, err)
+	}
+
+	return controller.SuccessResponse(c, nil, "remove user from group success")
+}
+
+func (controller *ProductController) PrivateGetUsersByGroupId(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	groupId := utils.ToUUID(c.Param("id"))
+
+	response, err := controller.ProductService.PrivateGetUsersByGroupId(ctx, groupId)
+	if err != nil {
+		return controller.ErrorResponse(c, err)
+	}
+
+	return controller.SuccessResponse(c, response, "get users by group id success")
+}
+
+func (controller *ProductController) PrivateGetGroupsByUserId(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	userId := utils.ToUUID(c.Param("id"))
+
+	response, err := controller.ProductService.PrivateGetGroupsByUserId(ctx, userId)
+	if err != nil {
+		return controller.ErrorResponse(c, err)
+	}
+
+	return controller.SuccessResponse(c, response, "get groups by user id success")
+}
 
