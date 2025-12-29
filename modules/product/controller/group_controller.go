@@ -7,7 +7,6 @@ import (
 	"go-api-starter/modules/product/dto"
 	"go-api-starter/modules/product/validator"
 
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
@@ -188,4 +187,3 @@ func (controller *ProductController) PrivateGetGroupsByUserId(c echo.Context) er
 
 	return controller.SuccessResponse(c, response, "get groups by user id success")
 }
-
