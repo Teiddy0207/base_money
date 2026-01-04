@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
+	coreentity "go-api-starter/core/entity"
 	"go-api-starter/core/logger"
 	"go-api-starter/core/params"
+	"go-api-starter/modules/product/dto"
 	"go-api-starter/modules/product/entity"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -46,7 +48,6 @@ func (r *ProductRepository) PrivateUpdateGroup(ctx context.Context, group *entit
 		return err
 	}
 
-	// Kiểm tra xem có record nào được update không
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		logger.Error("ProductRepository:PrivateUpdateGroup - RowsAffected", err)
@@ -97,13 +98,10 @@ func (r *ProductRepository) PrivateGetGroupById(ctx context.Context, id uuid.UUI
 }
 
 func (r *ProductRepository) PrivateGetGroups(ctx context.Context, params params.QueryParams) (*entity.PaginatedGroupResponse, error) {
-	// Tính offset cho pagination
 	offset := (params.PageNumber - 1) * params.PageSize
 
-	// Base query để lấy groups
 	baseQuery := `FROM groups`
 
-	// Thêm điều kiện search nếu có
 	var whereClause string
 	var args []interface{}
 
@@ -120,7 +118,6 @@ func (r *ProductRepository) PrivateGetGroups(ctx context.Context, params params.
 		whereClause = " WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	// Query để đếm tổng số records
 	countQuery := "SELECT COUNT(*) " + baseQuery + whereClause
 
 	var totalItems int
@@ -133,7 +130,6 @@ func (r *ProductRepository) PrivateGetGroups(ctx context.Context, params params.
 		return nil, err
 	}
 
-	// Query để lấy data với pagination
 	dataQuery := `
 		SELECT 
 			id, 
@@ -145,7 +141,6 @@ func (r *ProductRepository) PrivateGetGroups(ctx context.Context, params params.
 		ORDER BY created_at DESC
 		LIMIT $` + fmt.Sprintf("%d", argIndex) + ` OFFSET $` + fmt.Sprintf("%d", argIndex+1)
 
-	// Thêm params cho pagination
 	args = append(args, params.PageSize, offset)
 
 	var groups []entity.Group
@@ -158,7 +153,6 @@ func (r *ProductRepository) PrivateGetGroups(ctx context.Context, params params.
 		return nil, err
 	}
 
-	// Tạo response pagination
 	response := &entity.PaginatedGroupResponse{
 		Items:      groups,
 		TotalItems: totalItems,
@@ -169,14 +163,11 @@ func (r *ProductRepository) PrivateGetGroups(ctx context.Context, params params.
 	return response, nil
 }
 
-// UserGroup methods - Quản lý user trong group
-
 func (r *ProductRepository) PrivateAddUsersToGroup(ctx context.Context, groupID uuid.UUID, userIDs []uuid.UUID) error {
 	if len(userIDs) == 0 {
 		return nil
 	}
 
-	// Sử dụng transaction để đảm bảo tính nhất quán
 	tx, err := r.DB.SQLx().BeginTxx(ctx, nil)
 	if err != nil {
 		logger.Error("ProductRepository:PrivateAddUsersToGroup - BeginTx", err)
@@ -184,15 +175,15 @@ func (r *ProductRepository) PrivateAddUsersToGroup(ctx context.Context, groupID 
 	}
 	defer tx.Rollback()
 
-	// Insert từng user vào group (bỏ qua nếu đã tồn tại)
 	query := `
-		INSERT INTO user_groups (user_id, group_id, created_at)
-		VALUES ($1, $2, NOW())
+		INSERT INTO user_groups (id, user_id, group_id, created_at)
+		VALUES ($1, $2, $3, NOW())
 		ON CONFLICT (user_id, group_id) DO NOTHING
 	`
 
 	for _, userID := range userIDs {
-		_, err := tx.ExecContext(ctx, query, userID, groupID)
+		newID := uuid.New()
+		_, err := tx.ExecContext(ctx, query, newID, userID, groupID)
 		if err != nil {
 			logger.Error("ProductRepository:PrivateAddUsersToGroup - Insert", err)
 			return err
@@ -235,17 +226,25 @@ func (r *ProductRepository) PrivateRemoveUserFromGroup(ctx context.Context, grou
 func (r *ProductRepository) PrivateGetUsersByGroupId(ctx context.Context, groupID uuid.UUID) ([]entity.UserGroup, error) {
 	query := `
 		SELECT 
-			id,
-			user_id,
-			group_id,
-			created_at
-		FROM user_groups
-		WHERE group_id = $1
-		ORDER BY created_at DESC
+			ug.id as ug_id,
+			ug.user_id as ug_user_id,
+			ug.group_id as ug_group_id,
+			ug.created_at as ug_created_at,
+			g.id as g_id,
+			g.name as g_name,
+			g.description as g_description,
+			sl.id as u_id,
+			sl.provider_username as sl_provider_name,
+			sl.provider_email as sl_provider_email
+		FROM user_groups ug
+		LEFT JOIN groups g ON g.id = ug.group_id
+		LEFT JOIN social_logins sl ON sl.id = ug.user_id AND sl.is_active = true
+		WHERE ug.group_id = $1
+		ORDER BY ug.created_at DESC
 	`
 
-	var userGroups []entity.UserGroup
-	err := r.DB.SelectContext(ctx, &userGroups, query, groupID)
+	var results []dto.UserGroupWithRelations
+	err := r.DB.SelectContext(ctx, &results, query, groupID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return []entity.UserGroup{}, nil
@@ -254,7 +253,67 @@ func (r *ProductRepository) PrivateGetUsersByGroupId(ctx context.Context, groupI
 		return nil, err
 	}
 
+	userGroups := make([]entity.UserGroup, len(results))
+	for i, result := range results {
+		userGroups[i] = entity.UserGroup{
+			ID:        result.ID,
+			UserID:    result.UserID,
+			GroupID:   result.GroupID,
+			CreatedAt: result.CreatedAt,
+		}
+	}
+
 	return userGroups, nil
+}
+
+func (r *ProductRepository) PrivateGetUsersByGroupIdWithRelations(ctx context.Context, groupID uuid.UUID) ([]dto.UserGroupWithRelations, *entity.Group, error) {
+	query := `
+		SELECT 
+			ug.id as ug_id,
+			ug.user_id as ug_user_id,
+			ug.group_id as ug_group_id,
+			ug.created_at as ug_created_at,
+			g.id as g_id,
+			g.name as g_name,
+			g.description as g_description,
+			sl.id as u_id,
+			sl.provider_username as sl_provider_name,
+			sl.provider_email as sl_provider_email
+		FROM user_groups ug
+		LEFT JOIN groups g ON g.id = ug.group_id
+		LEFT JOIN social_logins sl ON sl.id = ug.user_id AND sl.is_active = true
+		WHERE ug.group_id = $1
+		ORDER BY ug.created_at DESC
+	`
+
+	var results []dto.UserGroupWithRelations
+	err := r.DB.SelectContext(ctx, &results, query, groupID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return []dto.UserGroupWithRelations{}, nil, nil
+		}
+		logger.Error("ProductRepository:PrivateGetUsersByGroupIdWithRelations", err)
+		return nil, nil, err
+	}
+
+	var group *entity.Group
+	if len(results) > 0 {
+		group = &entity.Group{
+			BaseEntity: coreentity.BaseEntity{
+				ID: results[0].GroupIDFromGroup,
+			},
+			Name:        results[0].GroupName,
+			Description: results[0].GroupDescription,
+		}
+	} else {
+		group, err = r.PrivateGetGroupById(ctx, groupID)
+		if err != nil {
+			logger.Error("ProductRepository:PrivateGetUsersByGroupIdWithRelations - GetGroupById", err)
+			return results, nil, err
+		}
+	}
+
+	return results, group, nil
 }
 
 func (r *ProductRepository) PrivateGetGroupsByUserId(ctx context.Context, userID uuid.UUID) ([]entity.UserGroup, error) {
@@ -282,4 +341,24 @@ func (r *ProductRepository) PrivateGetGroupsByUserId(ctx context.Context, userID
 	return userGroups, nil
 }
 
-
+func (r *ProductRepository) PrivateAreUsersInSameGroup(ctx context.Context, userA uuid.UUID, userB uuid.UUID) (bool, error) {
+	query := `
+		SELECT EXISTS (
+			SELECT 1
+			FROM user_groups ug1
+			INNER JOIN user_groups ug2 ON ug1.group_id = ug2.group_id
+			WHERE ug1.user_id = $1 AND ug2.user_id = $2
+		)
+	`
+	var exists bool
+	err := r.DB.GetContext(ctx, &exists, query, userA, userB)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		logger.Error("ProductRepository:PrivateAreUsersInSameGroup", err)
+		return false, err
+	}
+	logger.Info("ProductRepository:PrivateAreUsersInSameGroup", "userA", userA, "userB", userB, "exists", exists)
+	return exists, nil
+}

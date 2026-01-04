@@ -33,4 +33,9 @@ func (r *CalendarRouter) Setup(e *echo.Echo, mw *middleware.Middleware) {
 
 	// Events
 	calendarRoutes.POST("/events", r.controller.CreateEvent)
+
+	// User-specific busy view
+	userRoutes := v1.Group("/private/users")
+	userRoutes.Use(mw.AuthMiddleware())
+	userRoutes.GET("/:id/calendar/busy", r.controller.GetUserBusy)
 }

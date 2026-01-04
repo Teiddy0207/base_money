@@ -95,6 +95,7 @@ type ProductServiceInterface interface {
 	PrivateRemoveUserFromGroup(ctx context.Context, req *dto.RemoveUserFromGroupRequest) *errors.AppError
 	PrivateGetUsersByGroupId(ctx context.Context, groupID uuid.UUID) (*dto.GroupUsersResponse, *errors.AppError)
 	PrivateGetGroupsByUserId(ctx context.Context, userID uuid.UUID) ([]dto.UserGroupResponse, *errors.AppError)
+	PrivateAreUsersInSameGroup(ctx context.Context, userA uuid.UUID, userB uuid.UUID) (bool, *errors.AppError)
 
 	PublicGetProductDetail(ctx context.Context, slug string) (*dto.ProductDetailResponse, *errors.AppError)
 	PublicGetProductDetailWithFields(ctx context.Context, id uuid.UUID, field []string) (*dto.ProductDetailResponse, *errors.AppError)

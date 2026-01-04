@@ -109,3 +109,17 @@ func (r *AuthRepository) SeedGoogleProvider(ctx context.Context, clientID string
 	logger.Info("AuthRepository:SeedGoogleProvider:Success", "provider", "google")
 	return nil
 }
+
+func (r *AuthRepository) GetSocialLoginByID(ctx context.Context, id uuid.UUID) (*entity.SocialLogin, error) {
+	var sl entity.SocialLogin
+	query := `SELECT * FROM social_logins WHERE id = $1 AND is_active = true`
+	err := r.DB.GetContext(ctx, &sl, query, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		logger.Error("AuthRepository:GetSocialLoginByID:Error", "error", err, "id", id)
+		return nil, err
+	}
+	return &sl, nil
+}

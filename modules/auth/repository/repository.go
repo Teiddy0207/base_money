@@ -79,6 +79,7 @@ type AuthRepositoryInterface interface {
 	SaveOrUpdateSocialLogin(ctx context.Context, socialLogin *entity.SocialLogin) error
 	GetOAuthProviderByName(ctx context.Context, name string) (*entity.OAuthProvider, error)
 	SeedGoogleProvider(ctx context.Context, clientID string, clientSecret string, redirectURI string) error
+	GetSocialLoginByID(ctx context.Context, id uuid.UUID) (*entity.SocialLogin, error)
 
 	// ========================================
 	// Social Users Search Operations
