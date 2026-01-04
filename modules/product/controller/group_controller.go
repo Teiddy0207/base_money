@@ -6,8 +6,6 @@ import (
 	"go-api-starter/core/utils"
 	"go-api-starter/modules/product/dto"
 	"go-api-starter/modules/product/validator"
-
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
