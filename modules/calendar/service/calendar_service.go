@@ -13,6 +13,7 @@ import (
 	"go-api-starter/core/config"
 	"go-api-starter/core/errors"
 	"go-api-starter/core/logger"
+	authservice "go-api-starter/modules/auth/service"
 	"go-api-starter/modules/calendar/dto"
 	"go-api-starter/modules/calendar/entity"
 	"go-api-starter/modules/calendar/repository"
@@ -39,11 +40,12 @@ type CalendarService interface {
 }
 
 type calendarService struct {
-	repo repository.CalendarRepository
+	repo        repository.CalendarRepository
+	authService authservice.AuthServiceInterface
 }
 
-func NewCalendarService(repo repository.CalendarRepository) CalendarService {
-	return &calendarService{repo: repo}
+func NewCalendarService(repo repository.CalendarRepository, authSvc authservice.AuthServiceInterface) CalendarService {
+	return &calendarService{repo: repo, authService: authSvc}
 }
 
 // SaveGoogleConnection saves or updates a Google Calendar connection
@@ -106,19 +108,13 @@ func (s *calendarService) DisconnectCalendar(ctx context.Context, userID uuid.UU
 
 // GetFreeBusy gets free/busy information from Google Calendar
 func (s *calendarService) GetFreeBusy(ctx context.Context, userID uuid.UUID, startTime, endTime time.Time) ([]dto.TimeSlot, error) {
-	conn, err := s.repo.GetConnectionByUserAndProvider(ctx, userID, dto.ProviderGoogle)
-	if err != nil {
-		return nil, errors.NewAppError(errors.ErrNotFound, "No Google Calendar connected", err)
-	}
-
-	// Refresh token if expired
-	accessToken, err := s.ensureValidToken(ctx, conn)
-	if err != nil {
-		return nil, err
+	accessToken, appErr := s.authService.GetGoogleAccessToken(ctx, userID)
+	if appErr != nil {
+		return nil, appErr
 	}
 
 	// Call Google Calendar FreeBusy API
-	busySlots, err := s.callGoogleFreeBusy(accessToken, conn.CalendarEmail, startTime, endTime)
+	busySlots, err := s.callGoogleFreeBusy(accessToken, "", startTime, endTime)
 	if err != nil {
 		return nil, err
 	}
@@ -128,28 +124,22 @@ func (s *calendarService) GetFreeBusy(ctx context.Context, userID uuid.UUID, sta
 
 // GetFreeBusyForUsers gets free/busy info for multiple users
 func (s *calendarService) GetFreeBusyForUsers(ctx context.Context, userIDs []uuid.UUID, startTime, endTime time.Time) ([]dto.UserFreeBusy, error) {
-	connections, err := s.repo.GetConnectionsByUserIDs(ctx, userIDs)
-	if err != nil {
-		return nil, err
-	}
-
 	var results []dto.UserFreeBusy
-	for _, conn := range connections {
-		accessToken, err := s.ensureValidToken(ctx, &conn)
-		if err != nil {
-			logger.Error("Failed to refresh token for user", "user_id", conn.UserID, "error", err)
+	for _, uid := range userIDs {
+		accessToken, appErr := s.authService.GetGoogleAccessToken(ctx, uid)
+		if appErr != nil {
+			logger.Error("Failed to get token for user", "user_id", uid, "error", appErr)
 			continue
 		}
-
-		busySlots, err := s.callGoogleFreeBusy(accessToken, conn.CalendarEmail, startTime, endTime)
+		busySlots, err := s.callGoogleFreeBusy(accessToken, "", startTime, endTime)
 		if err != nil {
-			logger.Error("Failed to get free/busy for user", "user_id", conn.UserID, "error", err)
+			logger.Error("Failed to get free/busy for user", "user_id", uid, "error", err)
 			continue
 		}
 
 		results = append(results, dto.UserFreeBusy{
-			UserID:    conn.UserID.String(),
-			Email:     conn.CalendarEmail,
+			UserID:    uid.String(),
+			Email:     "",
 			BusySlots: busySlots,
 		})
 	}
@@ -159,14 +149,9 @@ func (s *calendarService) GetFreeBusyForUsers(ctx context.Context, userIDs []uui
 
 // CreateEvent creates an event on Google Calendar
 func (s *calendarService) CreateEvent(ctx context.Context, userID uuid.UUID, req *dto.CreateEventRequest) (*dto.CreateEventResponse, error) {
-	conn, err := s.repo.GetConnectionByUserAndProvider(ctx, userID, dto.ProviderGoogle)
-	if err != nil {
-		return nil, errors.NewAppError(errors.ErrNotFound, "No Google Calendar connected", err)
-	}
-
-	accessToken, err := s.ensureValidToken(ctx, conn)
-	if err != nil {
-		return nil, err
+	accessToken, appErr := s.authService.GetGoogleAccessToken(ctx, userID)
+	if appErr != nil {
+		return nil, appErr
 	}
 
 	// Build event payload
@@ -272,7 +257,7 @@ func (s *calendarService) callGoogleFreeBusy(accessToken, email string, startTim
 		"timeMin": startTime.Format(time.RFC3339),
 		"timeMax": endTime.Format(time.RFC3339),
 		"items": []map[string]string{
-			{"id": email},
+			{"id": "primary"},
 		},
 	}
 
@@ -281,6 +266,7 @@ func (s *calendarService) callGoogleFreeBusy(accessToken, email string, startTim
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Content-Type", "application/json")
 
+	logger.Info("CalendarService:FreeBusy:Request", "time_min", startTime.Format(time.RFC3339), "time_max", endTime.Format(time.RFC3339))
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -288,6 +274,7 @@ func (s *calendarService) callGoogleFreeBusy(accessToken, email string, startTim
 	}
 	defer resp.Body.Close()
 
+	logger.Info("CalendarService:FreeBusy:Response", "status", resp.StatusCode)
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("Google FreeBusy API error: %s", string(body))
@@ -307,7 +294,7 @@ func (s *calendarService) callGoogleFreeBusy(accessToken, email string, startTim
 	}
 
 	var busySlots []dto.TimeSlot
-	if cal, ok := result.Calendars[email]; ok {
+	if cal, ok := result.Calendars["primary"]; ok {
 		for _, busy := range cal.Busy {
 			busySlots = append(busySlots, dto.TimeSlot{
 				Start: busy.Start,
@@ -316,5 +303,6 @@ func (s *calendarService) callGoogleFreeBusy(accessToken, email string, startTim
 		}
 	}
 
+	logger.Info("CalendarService:FreeBusy:BusyCount", "count", len(busySlots))
 	return busySlots, nil
 }

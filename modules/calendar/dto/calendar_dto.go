@@ -49,6 +49,13 @@ type FreeBusyResponse struct {
 	Users []UserFreeBusy `json:"users"`
 }
 
+// Single user busy response for strict free/busy view
+type UserBusyResponse struct {
+	UserID string       `json:"user_id"`
+	User   BusyUserInfo `json:"user"`
+	Busy   []TimeSlot   `json:"busy"`
+}
+
 // ========== Calendar Event DTOs ==========
 
 // CreateEventRequest request to create a calendar event
@@ -77,4 +84,11 @@ type CreateEventResponse struct {
 type OAuthURLResponse struct {
 	URL   string `json:"url"`
 	State string `json:"state"`
+}
+
+// BusyUserInfo returns basic relational information for the target user
+type BusyUserInfo struct {
+	ID               string  `json:"id"`
+	ProviderUsername *string `json:"provider_username,omitempty"`
+	ProviderEmail    *string `json:"provider_email,omitempty"`
 }

@@ -191,3 +191,13 @@ func (s *ProductService) PrivateGetGroupsByUserId(ctx context.Context, userID uu
 
 	return groupResponses, nil
 }
+
+func (s *ProductService) PrivateAreUsersInSameGroup(ctx context.Context, userA uuid.UUID, userB uuid.UUID) (bool, *errors.AppError) {
+	ctx, cancel := context.WithTimeout(ctx, constants.DefaultRequestTimeout)
+	defer cancel()
+	exists, err := s.repo.PrivateAreUsersInSameGroup(ctx, userA, userB)
+	if err != nil {
+		return false, errors.NewAppError(errors.ErrGetFailed, "check same group failed", err)
+	}
+	return exists, nil
+}

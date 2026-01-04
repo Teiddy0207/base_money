@@ -39,6 +39,7 @@ type ProductRepositoryInterface interface {
 	PrivateGetUsersByGroupId(ctx context.Context, groupID uuid.UUID) ([]entity.UserGroup, error)
 	PrivateGetUsersByGroupIdWithRelations(ctx context.Context, groupID uuid.UUID) ([]dto.UserGroupWithRelations, *entity.Group, error)
 	PrivateGetGroupsByUserId(ctx context.Context, userID uuid.UUID) ([]entity.UserGroup, error)
+	PrivateAreUsersInSameGroup(ctx context.Context, userA uuid.UUID, userB uuid.UUID) (bool, error)
 
 	PrivateCreateBrand(ctx context.Context, brand *entity.Brand) error
 	PrivateGetBrandById(ctx context.Context, id uuid.UUID) (*entity.Brand, error)

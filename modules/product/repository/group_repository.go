@@ -340,3 +340,25 @@ func (r *ProductRepository) PrivateGetGroupsByUserId(ctx context.Context, userID
 
 	return userGroups, nil
 }
+
+func (r *ProductRepository) PrivateAreUsersInSameGroup(ctx context.Context, userA uuid.UUID, userB uuid.UUID) (bool, error) {
+	query := `
+		SELECT EXISTS (
+			SELECT 1
+			FROM user_groups ug1
+			INNER JOIN user_groups ug2 ON ug1.group_id = ug2.group_id
+			WHERE ug1.user_id = $1 AND ug2.user_id = $2
+		)
+	`
+	var exists bool
+	err := r.DB.GetContext(ctx, &exists, query, userA, userB)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		logger.Error("ProductRepository:PrivateAreUsersInSameGroup", err)
+		return false, err
+	}
+	logger.Info("ProductRepository:PrivateAreUsersInSameGroup", "userA", userA, "userB", userB, "exists", exists)
+	return exists, nil
+}
