@@ -2,11 +2,11 @@ package service
 
 import (
 	"context"
-	"sync"
 	"go-api-starter/core/errors"
 	"go-api-starter/core/params"
 	"go-api-starter/modules/product/dto"
 	"go-api-starter/modules/product/repository"
+	"sync"
 
 	"github.com/google/uuid"
 )
@@ -29,11 +29,12 @@ type ProductServiceInterface interface {
 	PrivateDeleteCategory(ctx context.Context, id uuid.UUID) *errors.AppError
 	PrivateGetCategories(ctx context.Context, params params.QueryParams) (*dto.PaginatedCategoryResponse, *errors.AppError)
 
-	PrivateCreateGroup(ctx context.Context, req *dto.GroupRequest) *errors.AppError
+	PrivateCreateGroup(ctx context.Context, req *dto.GroupRequest) (*dto.GroupResponse, *errors.AppError)
 	PrivateGetGroupById(ctx context.Context, id uuid.UUID) (*dto.GroupResponse, *errors.AppError)
 	PrivateUpdateGroup(ctx context.Context, req *dto.GroupRequest, id uuid.UUID) *errors.AppError
 	PrivateDeleteGroup(ctx context.Context, id uuid.UUID) *errors.AppError
 	PrivateGetGroups(ctx context.Context, params params.QueryParams) (*dto.PaginatedGroupResponse, *errors.AppError)
+	PrivateGetGroupsWhereMember(ctx context.Context, memberID uuid.UUID, params params.QueryParams) (*dto.PaginatedGroupResponse, *errors.AppError)
 
 	PrivateCreateBrand(ctx context.Context, req *dto.BrandRequest) *errors.AppError
 	PrivateGetBrands(ctx context.Context, params params.QueryParams) (*dto.PaginatedBrandResponse, *errors.AppError)
@@ -100,7 +101,7 @@ type ProductServiceInterface interface {
 	PublicGetProductDetail(ctx context.Context, slug string) (*dto.ProductDetailResponse, *errors.AppError)
 	PublicGetProductDetailWithFields(ctx context.Context, id uuid.UUID, field []string) (*dto.ProductDetailResponse, *errors.AppError)
 	PublicGetProducts(ctx context.Context, params params.QueryParams) (*dto.PaginatedProductDTO, *errors.AppError)
-	
+
 	PublicCreateWishlist(ctx context.Context, req *dto.WishlistRequest) *errors.AppError
 	PublicGetWishlists(ctx context.Context, params params.QueryParams) (*dto.PaginatedWishListDTO, *errors.AppError)
 	PublicGetWishlistById(ctx context.Context, id string) (*dto.WishlistResponse, *errors.AppError)

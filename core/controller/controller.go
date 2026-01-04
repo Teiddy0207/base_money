@@ -1,9 +1,10 @@
 package controller
 
 import (
+	"go-api-starter/core/errors"
+	"go-api-starter/core/logger"
 	"net/http"
 	"time"
-	"go-api-starter/core/errors"
 
 	"github.com/labstack/echo/v4"
 )
@@ -116,5 +117,41 @@ func (h *responseHandler) SuccessResponse(c echo.Context, data any, message stri
 }
 
 func (h *responseHandler) ErrorResponse(c echo.Context, err error) error {
-	return c.JSON(http.StatusInternalServerError, NewErrorResponse(http.StatusInternalServerError, errors.ErrInternalServer, err.Error()))
+	httpStatus := http.StatusInternalServerError
+	appCode := errors.ErrInternalServer
+	msg := "internal server error"
+
+	if err != nil {
+		if ae, ok := err.(*errors.AppError); ok && ae != nil {
+			appCode = ae.Code
+			if ae.Message != "" {
+				msg = ae.Message
+			}
+			switch appCode {
+			case errors.ErrInvalidInput, errors.ErrInvalidRequestData:
+				httpStatus = http.StatusBadRequest
+			case errors.ErrUnauthorized, errors.ErrTokenExpired, errors.ErrInvalidTokenFormat, errors.ErrMissingAuthorizationHeader:
+				httpStatus = http.StatusUnauthorized
+			case errors.ErrForbidden:
+				httpStatus = http.StatusForbidden
+			case errors.ErrNotFound:
+				httpStatus = http.StatusNotFound
+			case errors.ErrAlreadyExists:
+				httpStatus = http.StatusConflict
+			default:
+				httpStatus = http.StatusInternalServerError
+			}
+		} else {
+			if err.Error() != "" {
+				msg = err.Error()
+			}
+		}
+	}
+
+	logger.Error("BaseController:ErrorResponse",
+		"status", httpStatus,
+		"code", appCode,
+		"message", msg,
+	)
+	return c.JSON(httpStatus, NewErrorResponse(httpStatus, appCode, msg))
 }
