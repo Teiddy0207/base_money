@@ -27,9 +27,10 @@ type ProductRepositoryInterface interface {
 	PrivateUpdateCategory(ctx context.Context, category *entity.Category, id uuid.UUID) error
 	PrivateDeleteCategory(ctx context.Context, id uuid.UUID) error
 
-	PrivateCreateGroup(ctx context.Context, group *entity.Group) error
+	PrivateCreateGroup(ctx context.Context, group *entity.Group) (*entity.Group, error)
 	PrivateGetGroupById(ctx context.Context, id uuid.UUID) (*entity.Group, error)
 	PrivateGetGroups(ctx context.Context, params params.QueryParams) (*entity.PaginatedGroupResponse, error)
+	PrivateGetGroupsWhereMember(ctx context.Context, memberID uuid.UUID, params params.QueryParams) (*entity.PaginatedGroupResponse, error)
 	PrivateUpdateGroup(ctx context.Context, group *entity.Group, id uuid.UUID) error
 	PrivateDeleteGroup(ctx context.Context, id uuid.UUID) error
 

@@ -14,20 +14,29 @@ import (
 	"github.com/google/uuid"
 )
 
-func (r *ProductRepository) PrivateCreateGroup(ctx context.Context, group *entity.Group) error {
+func (r *ProductRepository) PrivateCreateGroup(ctx context.Context, group *entity.Group) (*entity.Group, error) {
 	query := `
 		INSERT INTO groups (name, description)
 		VALUES (:name, :description)
+		RETURNING id, created_at, updated_at
 	`
-	_, err := r.DB.NamedExecContext(ctx, query, group)
+	rows, err := r.DB.NamedQueryContext(ctx, query, group)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil
+			return nil, nil
 		}
 		logger.Error("ProductRepository:PrivateCreateGroup", err)
-		return err
+		return nil, err
 	}
-	return nil
+	defer rows.Close()
+	if rows.Next() {
+		err = rows.Scan(&group.ID, &group.CreatedAt, &group.UpdatedAt)
+		if err != nil {
+			logger.Error("ProductRepository:PrivateCreateGroup:Scan", err)
+			return nil, err
+		}
+	}
+	return group, nil
 }
 
 func (r *ProductRepository) PrivateUpdateGroup(ctx context.Context, group *entity.Group, id uuid.UUID) error {
@@ -153,6 +162,7 @@ func (r *ProductRepository) PrivateGetGroups(ctx context.Context, params params.
 		return nil, err
 	}
 
+	logger.Info("ProductRepository:PrivateGetGroups:Result", "total_items", totalItems, "items_count", len(groups))
 	response := &entity.PaginatedGroupResponse{
 		Items:      groups,
 		TotalItems: totalItems,
@@ -163,6 +173,68 @@ func (r *ProductRepository) PrivateGetGroups(ctx context.Context, params params.
 	return response, nil
 }
 
+func (r *ProductRepository) PrivateGetGroupsWhereMember(ctx context.Context, memberID uuid.UUID, params params.QueryParams) (*entity.PaginatedGroupResponse, error) {
+	offset := (params.PageNumber - 1) * params.PageSize
+	baseQuery := `
+		FROM groups g
+		INNER JOIN user_groups ug ON ug.group_id = g.id
+		WHERE ug.user_id = $1
+	`
+	var args []interface{}
+	args = append(args, memberID)
+	if params.Search != "" {
+		baseQuery += " AND g.name ILIKE $2"
+		args = append(args, "%"+params.Search+"%")
+	}
+	countQuery := "SELECT COUNT(DISTINCT g.id) " + baseQuery
+	var totalItems int
+	err := r.DB.GetContext(ctx, &totalItems, countQuery, args...)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return &entity.PaginatedGroupResponse{
+				Items:      []entity.Group{},
+				TotalItems: 0,
+				PageNumber: params.PageNumber,
+				PageSize:   params.PageSize,
+			}, nil
+		}
+		logger.Error("ProductRepository:PrivateGetGroupsWhereMember - Count", err)
+		return nil, err
+	}
+	dataQuery := `
+		SELECT 
+			g.id, 
+			g.name, 
+			g.description, 
+			g.created_at, 
+			g.updated_at
+	` + baseQuery + `
+		ORDER BY g.created_at DESC
+		LIMIT $` + fmt.Sprintf("%d", len(args)+1) + ` OFFSET $` + fmt.Sprintf("%d", len(args)+2)
+	args = append(args, params.PageSize, offset)
+	var groups []entity.Group
+	err = r.DB.SelectContext(ctx, &groups, dataQuery, args...)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return &entity.PaginatedGroupResponse{
+				Items:      []entity.Group{},
+				TotalItems: 0,
+				PageNumber: params.PageNumber,
+				PageSize:   params.PageSize,
+			}, nil
+		}
+		logger.Error("ProductRepository:PrivateGetGroupsWhereMember - Select", err)
+		return nil, err
+	}
+	logger.Info("ProductRepository:PrivateGetGroupsWhereMember:Result", "member_id", memberID, "total_items", totalItems, "items_count", len(groups))
+	response := &entity.PaginatedGroupResponse{
+		Items:      groups,
+		TotalItems: totalItems,
+		PageNumber: params.PageNumber,
+		PageSize:   params.PageSize,
+	}
+	return response, nil
+}
 func (r *ProductRepository) PrivateAddUsersToGroup(ctx context.Context, groupID uuid.UUID, userIDs []uuid.UUID) error {
 	if len(userIDs) == 0 {
 		return nil

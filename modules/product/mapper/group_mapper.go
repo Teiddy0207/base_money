@@ -25,6 +25,15 @@ func ToGroupResponse(entity *entity.Group) *dto.GroupResponse {
 }
 
 func ToGroupPaginationResponse(entity *entity.PaginatedGroupResponse) *dto.PaginatedGroupResponse {
+	if entity == nil {
+		return &dto.PaginatedGroupResponse{
+			Items:      []dto.GroupResponse{},
+			TotalItems: 0,
+			TotalPages: 0,
+			PageNumber: 0,
+			PageSize:   0,
+		}
+	}
 	// Convert từng group entity sang group response
 	groupResponses := make([]dto.GroupResponse, len(entity.Items))
 	for i, group := range entity.Items {

@@ -13,17 +13,17 @@ import (
 	"github.com/google/uuid"
 )
 
-func (s *ProductService) PrivateCreateGroup(ctx context.Context, req *dto.GroupRequest) *errors.AppError {
+func (s *ProductService) PrivateCreateGroup(ctx context.Context, req *dto.GroupRequest) (*dto.GroupResponse, *errors.AppError) {
 	ctx, cancel := context.WithTimeout(ctx, constants.DefaultRequestTimeout)
 	defer cancel()
 
 	group := mapper.ToGroupEntity(req)
 
-	err := s.repo.PrivateCreateGroup(ctx, group)
+	created, err := s.repo.PrivateCreateGroup(ctx, group)
 	if err != nil {
-		return errors.NewAppError(errors.ErrCreateFailed, "create group failed", err)
+		return nil, errors.NewAppError(errors.ErrCreateFailed, "create group failed", err)
 	}
-	return nil
+	return mapper.ToGroupResponse(created), nil
 }
 
 func (s *ProductService) PrivateGetGroupById(ctx context.Context, id uuid.UUID) (*dto.GroupResponse, *errors.AppError) {
@@ -48,10 +48,24 @@ func (s *ProductService) PrivateGetGroups(ctx context.Context, params params.Que
 	ctx, cancel := context.WithTimeout(ctx, constants.DefaultRequestTimeout)
 	defer cancel()
 
+	logger.Info("ProductService:PrivateGetGroups:Request", "page_number", params.PageNumber, "page_size", params.PageSize, "search", params.Search)
 	groups, err := s.repo.PrivateGetGroups(ctx, params)
 	if err != nil {
 		return nil, errors.NewAppError(errors.ErrGetFailed, "get groups failed", err)
 	}
+	logger.Info("ProductService:PrivateGetGroups:Result", "total_items", groups.TotalItems)
+	return mapper.ToGroupPaginationResponse(groups), nil
+}
+
+func (s *ProductService) PrivateGetGroupsWhereMember(ctx context.Context, memberID uuid.UUID, params params.QueryParams) (*dto.PaginatedGroupResponse, *errors.AppError) {
+	ctx, cancel := context.WithTimeout(ctx, constants.DefaultRequestTimeout)
+	defer cancel()
+	logger.Info("ProductService:PrivateGetGroupsWhereMember:Request", "member_id", memberID, "page_number", params.PageNumber, "page_size", params.PageSize, "search", params.Search)
+	groups, err := s.repo.PrivateGetGroupsWhereMember(ctx, memberID, params)
+	if err != nil {
+		return nil, errors.NewAppError(errors.ErrGetFailed, "get groups failed", err)
+	}
+	logger.Info("ProductService:PrivateGetGroupsWhereMember:Result", "total_items", groups.TotalItems)
 	return mapper.ToGroupPaginationResponse(groups), nil
 }
 
