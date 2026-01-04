@@ -4,6 +4,7 @@ import (
 	"context"
 	"go-api-starter/core/database"
 	"go-api-starter/core/params"
+	"go-api-starter/modules/product/dto"
 	"go-api-starter/modules/product/entity"
 
 	"github.com/google/uuid"
@@ -26,9 +27,10 @@ type ProductRepositoryInterface interface {
 	PrivateUpdateCategory(ctx context.Context, category *entity.Category, id uuid.UUID) error
 	PrivateDeleteCategory(ctx context.Context, id uuid.UUID) error
 
-	PrivateCreateGroup(ctx context.Context, group *entity.Group) error
+	PrivateCreateGroup(ctx context.Context, group *entity.Group) (*entity.Group, error)
 	PrivateGetGroupById(ctx context.Context, id uuid.UUID) (*entity.Group, error)
 	PrivateGetGroups(ctx context.Context, params params.QueryParams) (*entity.PaginatedGroupResponse, error)
+	PrivateGetGroupsWhereMember(ctx context.Context, memberID uuid.UUID, params params.QueryParams) (*entity.PaginatedGroupResponse, error)
 	PrivateUpdateGroup(ctx context.Context, group *entity.Group, id uuid.UUID) error
 	PrivateDeleteGroup(ctx context.Context, id uuid.UUID) error
 
@@ -36,7 +38,9 @@ type ProductRepositoryInterface interface {
 	PrivateAddUsersToGroup(ctx context.Context, groupID uuid.UUID, userIDs []uuid.UUID) error
 	PrivateRemoveUserFromGroup(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error
 	PrivateGetUsersByGroupId(ctx context.Context, groupID uuid.UUID) ([]entity.UserGroup, error)
+	PrivateGetUsersByGroupIdWithRelations(ctx context.Context, groupID uuid.UUID) ([]dto.UserGroupWithRelations, *entity.Group, error)
 	PrivateGetGroupsByUserId(ctx context.Context, userID uuid.UUID) ([]entity.UserGroup, error)
+	PrivateAreUsersInSameGroup(ctx context.Context, userA uuid.UUID, userB uuid.UUID) (bool, error)
 
 	PrivateCreateBrand(ctx context.Context, brand *entity.Brand) error
 	PrivateGetBrandById(ctx context.Context, id uuid.UUID) (*entity.Brand, error)

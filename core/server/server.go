@@ -12,6 +12,7 @@ import (
 	// storageClient "go-api-starter/core/storage"
 	"go-api-starter/core/utils"
 	"go-api-starter/modules/auth"
+	"go-api-starter/modules/calendar"
 	"go-api-starter/modules/product"
 	// "go-api-starter/modules/storage"
 	"go-api-starter/workers"
@@ -137,6 +138,7 @@ func initServer() (*Server, error) {
 	product.Init(e, db, *redisCache)
 	// storage.Init(e, db, r2Client, *redisCache)
 	auth.Init(e, db, *redisCache)
+	calendar.Init(e, db, *redisCache)
 
 	// Initialize Asynq worker server
 	workers.NewServer()

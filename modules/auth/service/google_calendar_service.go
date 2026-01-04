@@ -10,6 +10,7 @@ import (
 	"go-api-starter/core/logger"
 	"go-api-starter/core/params"
 	"go-api-starter/modules/auth/dto"
+	"go-api-starter/modules/auth/entity"
 	"go-api-starter/modules/auth/mapper"
 	"io"
 	"net/http"
@@ -269,4 +270,54 @@ func (service *AuthService) refreshGoogleToken(ctx context.Context, refreshToken
 		RefreshToken: newToken.RefreshToken,
 		ExpiresAt:    newToken.Expiry,
 	}, nil
+}
+
+func (service *AuthService) GetGoogleAccessToken(ctx context.Context, userID uuid.UUID) (string, *errors.AppError) {
+	logger.Info("AuthService:GetGoogleAccessToken:Start", "user_id", userID)
+	token, err := service.getGoogleTokenForUser(ctx, userID)
+	if err != nil {
+		logger.Error("AuthService:GetGoogleAccessToken:Error", "user_id", userID, "error", err)
+		return "", errors.NewAppError(errors.ErrUnauthorized, err.Error(), nil)
+	}
+	logger.Info("AuthService:GetGoogleAccessToken:Success", "user_id", userID)
+	return token, nil
+}
+
+func (service *AuthService) GetUserIDBySocialLoginID(ctx context.Context, socialLoginID uuid.UUID) (uuid.UUID, *errors.AppError) {
+	sl, err := service.repo.GetSocialLoginByID(ctx, socialLoginID)
+	if err != nil {
+		return uuid.Nil, errors.NewAppError(errors.ErrGetFailed, "failed to get social login", err)
+	}
+	if sl == nil {
+		return uuid.Nil, errors.NewAppError(errors.ErrNotFound, "social login not found", nil)
+	}
+	logger.Info("AuthService:GetUserIDBySocialLoginID", "social_login_id", socialLoginID, "user_id", sl.UserID)
+	return sl.UserID, nil
+}
+
+func (service *AuthService) GetSocialLoginByUserAndProviderName(ctx context.Context, userID uuid.UUID, providerName string) (*entity.SocialLogin, *errors.AppError) {
+	provider, err := service.repo.GetOAuthProviderByName(ctx, providerName)
+	if err != nil || provider == nil {
+		return nil, errors.NewAppError(errors.ErrNotFound, "provider not found", err)
+	}
+	sl, err := service.repo.GetSocialLoginByUserIDAndProvider(ctx, userID, provider.ID)
+	if err != nil {
+		return nil, errors.NewAppError(errors.ErrGetFailed, "failed to get social login", err)
+	}
+	if sl == nil {
+		return nil, errors.NewAppError(errors.ErrNotFound, "social login not found", nil)
+	}
+	logger.Info("AuthService:GetSocialLoginByUserAndProviderName", "user_id", userID, "social_login_id", sl.ID, "provider", providerName)
+	return sl, nil
+}
+
+func (service *AuthService) GetSocialLoginByID(ctx context.Context, id uuid.UUID) (*entity.SocialLogin, *errors.AppError) {
+	sl, err := service.repo.GetSocialLoginByID(ctx, id)
+	if err != nil {
+		return nil, errors.NewAppError(errors.ErrGetFailed, "failed to get social login", err)
+	}
+	if sl == nil {
+		return nil, errors.NewAppError(errors.ErrNotFound, "social login not found", nil)
+	}
+	return sl, nil
 }

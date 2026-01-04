@@ -17,9 +17,9 @@ import (
 func Init(e *echo.Echo, db database.Database, cache cache.Cache) {
 	repository := repository.NewProductRepository(db)
 	service := service.NewProductService(repository)
-	controller := controller.NewProductController(service)
 	authRepository := authRepository.NewAuthRepository(db)
 	authService := authService.NewAuthService(authRepository, cache)
+	controller := controller.NewProductController(service, authService)
 	middleware := middleware.NewMiddleware(authService)
 
 	router.NewProductRouter(*controller).Setup(e, middleware)
