@@ -44,7 +44,11 @@ func (controller *ProductController) PrivateCreateGroup(c echo.Context) error {
 			UserIDs: []uuid.UUID{sl.ID},
 		})
 	}
-	return controller.SuccessResponse(c, created, "create group success")
+	// Wrap response trong data.group theo yêu cầu frontend
+	responseData := map[string]interface{}{
+		"group": created,
+	}
+	return controller.SuccessResponse(c, responseData, "create group success")
 }
 
 func (controller *ProductController) PrivateGetGroupById(c echo.Context) error {

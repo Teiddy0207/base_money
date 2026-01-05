@@ -18,8 +18,8 @@ type RemoveUserFromGroupRequest struct {
 
 type UserInfo struct {
 	ID            uuid.UUID `json:"id"`
-	ProviderName  *string    `json:"provider_name"`
-	ProviderEmail *string    `json:"provider_email"`
+	ProviderName  string    `json:"provider_name"`  // Không được null, dùng empty string nếu không có
+	ProviderEmail string    `json:"provider_email"` // Không được null, dùng empty string nếu không có
 }
 
 type GroupInfo struct {
@@ -60,8 +60,8 @@ type UserGroupWithRelations struct {
 	UserIDFromUser     uuid.UUID  `db:"u_id"`
 	
 	// SocialLogin fields
-	ProviderName       *string    `db:"sl_provider_name"`
-	ProviderEmail      *string    `db:"sl_provider_email"`
+	ProviderName       string    `db:"sl_provider_name"`  // COALESCE đảm bảo không null
+	ProviderEmail      string    `db:"sl_provider_email"` // COALESCE đảm bảo không null
 }
 
 

@@ -349,13 +349,13 @@ func (r *ProductRepository) PrivateGetUsersByGroupIdWithRelations(ctx context.Co
 			g.name as g_name,
 			g.description as g_description,
 			sl.id as u_id,
-			sl.provider_username as sl_provider_name,
-			sl.provider_email as sl_provider_email
+			COALESCE(sl.provider_username, '') as sl_provider_name,
+			COALESCE(sl.provider_email, '') as sl_provider_email
 		FROM user_groups ug
 		LEFT JOIN groups g ON g.id = ug.group_id
 		LEFT JOIN social_logins sl ON sl.id = ug.user_id AND sl.is_active = true
 		WHERE ug.group_id = $1
-		ORDER BY ug.created_at DESC
+		ORDER BY ug.created_at ASC
 	`
 
 	var results []dto.UserGroupWithRelations
