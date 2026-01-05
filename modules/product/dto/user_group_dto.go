@@ -64,3 +64,4 @@ type UserGroupWithRelations struct {
 	ProviderEmail      *string    `db:"sl_provider_email"`
 }
 
+

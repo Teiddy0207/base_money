@@ -13,3 +13,4 @@ type UserGroup struct {
 	CreatedAt time.Time `db:"created_at"`
 }
 
+
