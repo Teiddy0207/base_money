@@ -175,13 +175,15 @@ func (r *ProductRepository) PrivateGetGroups(ctx context.Context, params params.
 
 func (r *ProductRepository) PrivateGetGroupsWhereMember(ctx context.Context, memberID uuid.UUID, params params.QueryParams) (*entity.PaginatedGroupResponse, error) {
 	offset := (params.PageNumber - 1) * params.PageSize
+	// memberID là social_logins.id, cần join với social_logins để lấy user_id
+	// Sau đó filter user_groups theo social_logins.id (vì user_groups.user_id lưu social_logins.id)
 	baseQuery := `
 		FROM groups g
 		INNER JOIN user_groups ug ON ug.group_id = g.id
 		WHERE ug.user_id = $1
 	`
 	var args []interface{}
-	args = append(args, memberID)
+	args = append(args, memberID) // memberID là social_logins.id
 	if params.Search != "" {
 		baseQuery += " AND g.name ILIKE $2"
 		args = append(args, "%"+params.Search+"%")
@@ -349,13 +351,13 @@ func (r *ProductRepository) PrivateGetUsersByGroupIdWithRelations(ctx context.Co
 			g.name as g_name,
 			g.description as g_description,
 			sl.id as u_id,
-			sl.provider_username as sl_provider_name,
-			sl.provider_email as sl_provider_email
+			COALESCE(sl.provider_username, '') as sl_provider_name,
+			COALESCE(sl.provider_email, '') as sl_provider_email
 		FROM user_groups ug
 		LEFT JOIN groups g ON g.id = ug.group_id
 		LEFT JOIN social_logins sl ON sl.id = ug.user_id AND sl.is_active = true
 		WHERE ug.group_id = $1
-		ORDER BY ug.created_at DESC
+		ORDER BY ug.created_at ASC
 	`
 
 	var results []dto.UserGroupWithRelations
