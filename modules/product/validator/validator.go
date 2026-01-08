@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"fmt"
 	"go-api-starter/core/constants"
 	"go-api-starter/core/utils"
 	"go-api-starter/core/validation"
@@ -235,6 +236,59 @@ func ValidateWishlistRequest(req *dto.WishlistRequest) *validation.ValidationRes
 
 	if utils.IsEmpty(req.ProductID) {
 		result.AddError("product_id", "Product ID is required")
+	}
+
+	return result
+}
+
+func ValidateGroupRequest(req *dto.GroupRequest) *validation.ValidationResult {
+	if req == nil {
+		return nil
+	}
+	result := validation.NewValidationResult()
+
+	if utils.IsEmpty(req.Name) {
+		result.AddError("name", "Name is required")
+	}
+
+	return result
+}
+
+func ValidateAddUsersToGroupRequest(req *dto.AddUsersToGroupRequest) *validation.ValidationResult {
+	if req == nil {
+		return nil
+	}
+	result := validation.NewValidationResult()
+
+	if req.GroupID == uuid.Nil {
+		result.AddError("group_id", "Group ID is required")
+	}
+
+	if len(req.UserIDs) == 0 {
+		result.AddError("user_ids", "At least one user ID is required")
+	}
+
+	for i, userID := range req.UserIDs {
+		if userID == uuid.Nil {
+			result.AddError("user_ids", fmt.Sprintf("User ID at index %d is invalid", i))
+		}
+	}
+
+	return result
+}
+
+func ValidateRemoveUserFromGroupRequest(req *dto.RemoveUserFromGroupRequest) *validation.ValidationResult {
+	if req == nil {
+		return nil
+	}
+	result := validation.NewValidationResult()
+
+	if req.GroupID == uuid.Nil {
+		result.AddError("group_id", "Group ID is required")
+	}
+
+	if req.UserID == uuid.Nil {
+		result.AddError("user_id", "User ID is required")
 	}
 
 	return result

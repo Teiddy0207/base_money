@@ -8,9 +8,10 @@ import (
 
 // SocialUserResult represents a user from social_logins for search
 type SocialUserResult struct {
-	UserID      string `db:"user_id" json:"id"`
-	Email       string `db:"provider_email" json:"email"`
-	DisplayName string `db:"provider_username" json:"display_name"`
+	ID           string `db:"id" json:"id"`                        // social_logins.id - dùng để thêm vào group
+	UserID       string `db:"user_id" json:"user_id"`              // users.id - giữ lại để tương thích
+	Email        string `db:"provider_email" json:"email"`
+	DisplayName  string `db:"provider_username" json:"display_name"`
 }
 
 // SearchSocialUsers searches for users from social_logins table
@@ -19,6 +20,7 @@ func (r *AuthRepository) SearchSocialUsers(ctx context.Context, query string) ([
 
 	sqlQuery := `
 		SELECT DISTINCT ON (user_id)
+			id::text as id,
 			user_id::text as user_id,
 			COALESCE(provider_email, '') as provider_email,
 			COALESCE(provider_username, '') as provider_username
@@ -51,6 +53,7 @@ func (r *AuthRepository) GetAllSocialUsers(ctx context.Context) ([]SocialUserRes
 
 	sqlQuery := `
 		SELECT DISTINCT ON (user_id)
+			id::text as id,
 			user_id::text as user_id,
 			COALESCE(provider_email, '') as provider_email,
 			COALESCE(provider_username, '') as provider_username
