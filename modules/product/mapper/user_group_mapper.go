@@ -39,18 +39,21 @@ func ToUserGroupResponseWithRelations(relation *dto.UserGroupWithRelations) *dto
 		CreatedAt: relation.CreatedAt,
 	}
 
-	
-	userID := relation.UserID 
+	// Sử dụng UserIDFromUser (social_logins.id) nếu có, nếu không thì dùng UserID (user_groups.user_id)
+	userID := relation.UserID
 	if relation.UserIDFromUser != uuid.Nil {
-		userID = relation.UserIDFromUser 
-	}
-	
-	response.User = &dto.UserInfo{
-		ID:            userID, 
-		ProviderName:  relation.ProviderName,
-		ProviderEmail: relation.ProviderEmail,
+		userID = relation.UserIDFromUser
 	}
 
+	// Luôn tạo UserInfo với thông tin từ social_logins
+	// COALESCE trong query đảm bảo ProviderName và ProviderEmail không null (empty string nếu không có)
+	response.User = &dto.UserInfo{
+		ID:            userID,
+		ProviderName:  relation.ProviderName,  // Đã được COALESCE thành empty string nếu null
+		ProviderEmail: relation.ProviderEmail, // Đã được COALESCE thành empty string nếu null
+	}
+
+	// Thêm Group info nếu có
 	if relation.GroupIDFromGroup != uuid.Nil {
 		response.Group = &dto.GroupInfo{
 			ID:          relation.GroupIDFromGroup,

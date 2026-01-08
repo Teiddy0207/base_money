@@ -617,7 +617,7 @@ func (service *AuthService) HandleGoogleCallback(ctx context.Context, code strin
 		newUser := &entity.User{
 			Email:    &userInfo.Email,
 			Phone:    "", // Empty string for Google login users
-			Username:  &username,
+			Username: &username,
 			Password: hashedPassword,
 			IsActive: true, // Set default to true for new users
 		}
@@ -764,7 +764,8 @@ type GoogleTokenInfo struct {
 
 // VerifyGoogleIdToken verifies Google idToken and returns login response
 // googleAccessToken và googleRefreshToken là optional - nếu có sẽ được lưu để gọi Google APIs như Calendar
-func (service *AuthService) VerifyGoogleIdToken(ctx context.Context, idToken string, googleAccessToken string, googleRefreshToken string) (*dto.LoginResponse, *errors.AppError) {
+// serverAuthCode là optional - nếu có, backend sẽ exchange để lấy refresh_token
+func (service *AuthService) VerifyGoogleIdToken(ctx context.Context, idToken string, googleAccessToken string, googleRefreshToken string, serverAuthCode string) (*dto.LoginResponse, *errors.AppError) {
 	cfg, ok := config.GetSafe()
 	if !ok {
 		return nil, errors.NewAppError(errors.ErrInternalServer, "config not initialized", nil)
@@ -772,6 +773,24 @@ func (service *AuthService) VerifyGoogleIdToken(ctx context.Context, idToken str
 
 	if cfg.GoogleAPI.ClientID == "" {
 		return nil, errors.NewAppError(errors.ErrInternalServer, "Google OAuth configuration is missing", nil)
+	}
+
+	// If serverAuthCode is provided and we don't have refresh_token, exchange it
+	if serverAuthCode != "" && googleRefreshToken == "" {
+		logger.Info("AuthService:VerifyGoogleIdToken:ExchangingServerAuthCode")
+		tokens, err := service.exchangeAuthCodeForTokens(ctx, serverAuthCode, cfg)
+		if err != nil {
+			logger.Error("AuthService:VerifyGoogleIdToken:ExchangeAuthCode:Error:", err)
+			// Don't fail login, just log the error
+		} else {
+			if tokens.AccessToken != "" {
+				googleAccessToken = tokens.AccessToken
+			}
+			if tokens.RefreshToken != "" {
+				googleRefreshToken = tokens.RefreshToken
+				logger.Info("AuthService:VerifyGoogleIdToken:RefreshTokenObtained")
+			}
+		}
 	}
 
 	// Verify token using Google's tokeninfo API
@@ -808,7 +827,7 @@ func (service *AuthService) VerifyGoogleIdToken(ctx context.Context, idToken str
 		newUser := &entity.User{
 			Email:    &userInfo.Email,
 			Phone:    "", // Empty string for Google login users
-			Username:  &username,
+			Username: &username,
 			Password: hashedPassword,
 			IsActive: true, // Set default to true for new users
 		}
@@ -941,4 +960,39 @@ func (service *AuthService) verifyGoogleTokenInfo(ctx context.Context, idToken, 
 	}
 
 	return &tokenInfo, nil
+}
+
+// exchangeAuthCodeForTokens exchanges serverAuthCode for access_token and refresh_token
+func (service *AuthService) exchangeAuthCodeForTokens(ctx context.Context, serverAuthCode string, cfg *config.Config) (*GoogleToken, error) {
+	// Use oauth2 library to exchange code
+	oauth2Config := &oauth2.Config{
+		ClientID:     cfg.GoogleAPI.ClientID,
+		ClientSecret: cfg.GoogleAPI.ClientSecret,
+		RedirectURL:  "", // Empty for mobile apps
+		Scopes: []string{
+			"https://www.googleapis.com/auth/calendar",
+			"https://www.googleapis.com/auth/calendar.events",
+		},
+		Endpoint: google.Endpoint,
+	}
+
+	// Exchange the code
+	token, err := oauth2Config.Exchange(ctx, serverAuthCode)
+	if err != nil {
+		logger.Error("exchangeAuthCodeForTokens:Exchange:Error:", err)
+		return nil, err
+	}
+
+	result := &GoogleToken{
+		AccessToken:  token.AccessToken,
+		RefreshToken: token.RefreshToken,
+		ExpiresAt:    token.Expiry,
+	}
+
+	logger.Info("exchangeAuthCodeForTokens:Success",
+		"has_access_token", result.AccessToken != "",
+		"has_refresh_token", result.RefreshToken != "",
+		"expires_at", result.ExpiresAt)
+
+	return result, nil
 }

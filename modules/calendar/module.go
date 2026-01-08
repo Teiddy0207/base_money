@@ -4,30 +4,27 @@ import (
 	"go-api-starter/core/cache"
 	"go-api-starter/core/database"
 	"go-api-starter/core/middleware"
-	authRepository "go-api-starter/modules/auth/repository"
-	authService "go-api-starter/modules/auth/service"
+	authRepo "go-api-starter/modules/auth/repository"
 	"go-api-starter/modules/calendar/controller"
 	"go-api-starter/modules/calendar/repository"
 	"go-api-starter/modules/calendar/router"
 	"go-api-starter/modules/calendar/service"
-	productRepository "go-api-starter/modules/product/repository"
-	productService "go-api-starter/modules/product/service"
+	invitService "go-api-starter/modules/invitation/service"
+	notifService "go-api-starter/modules/notification/service"
 
 	"github.com/labstack/echo/v4"
 )
 
-func Init(e *echo.Echo, db database.Database, cache cache.Cache) {
+func Init(e *echo.Echo, db database.Database, cache cache.Cache, notifService *notifService.NotificationService, invitationService *invitService.InvitationService) {
 	// Initialize layers
 	repo := repository.NewCalendarRepository(db)
-	authRepo := authRepository.NewAuthRepository(db)
-	authSvc := authService.NewAuthService(authRepo, cache)
-	calendarService := service.NewCalendarService(repo, authSvc)
-	productRepo := productRepository.NewProductRepository(db)
-	productSvc := productService.NewProductService(productRepo)
-	calendarController := controller.NewCalendarController(calendarService, productSvc, authSvc)
+	userRepo := authRepo.NewAuthRepository(db)
+
+	calendarService := service.NewCalendarService(repo, userRepo, notifService, invitationService)
+	calendarController := controller.NewCalendarController(calendarService)
 
 	// Get middleware for auth
-	mw := middleware.NewMiddleware(authSvc)
+	mw := middleware.NewMiddleware(nil)
 
 	// Setup routes
 	router.NewCalendarRouter(calendarController).Setup(e, mw)

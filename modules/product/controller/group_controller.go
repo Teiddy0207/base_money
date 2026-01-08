@@ -44,7 +44,11 @@ func (controller *ProductController) PrivateCreateGroup(c echo.Context) error {
 			UserIDs: []uuid.UUID{sl.ID},
 		})
 	}
-	return controller.SuccessResponse(c, created, "create group success")
+	// Wrap response trong data.group theo yêu cầu frontend
+	responseData := map[string]interface{}{
+		"group": created,
+	}
+	return controller.SuccessResponse(c, responseData, "create group success")
 }
 
 func (controller *ProductController) PrivateGetGroupById(c echo.Context) error {
@@ -149,6 +153,30 @@ func (controller *ProductController) PrivateAddUsersToGroup(c echo.Context) erro
 	if validationResult.HasError() {
 		return controller.BadRequest(errors.ErrInvalidInput, "Invalid request data", validationResult)
 	}
+
+	// Convert user_ids từ users.id sang social_logins.id nếu cần
+	// Đảm bảo user_ids luôn là social_logins.id để query groups đúng
+	convertedUserIDs := make([]uuid.UUID, 0, len(requestData.UserIDs))
+	for _, userID := range requestData.UserIDs {
+		// Thử lấy social_login bằng ID trực tiếp (nếu userID đã là social_logins.id)
+		sl, err := controller.AuthService.GetSocialLoginByID(ctx, userID)
+		if err == nil && sl != nil {
+			// userID đã là social_logins.id
+			convertedUserIDs = append(convertedUserIDs, userID)
+		} else {
+			// userID có thể là users.id, thử convert sang social_logins.id
+			sl, err := controller.AuthService.GetSocialLoginByUserAndProviderName(ctx, userID, "google")
+			if err == nil && sl != nil {
+				convertedUserIDs = append(convertedUserIDs, sl.ID)
+			} else {
+				// Nếu không tìm thấy, giữ nguyên (có thể là social_logins.id nhưng không active)
+				convertedUserIDs = append(convertedUserIDs, userID)
+			}
+		}
+	}
+
+	// Cập nhật requestData với user_ids đã convert
+	requestData.UserIDs = convertedUserIDs
 
 	err := controller.ProductService.PrivateAddUsersToGroup(ctx, requestData)
 	if err != nil {

@@ -335,7 +335,7 @@ func (controller *AuthController) GoogleVerify(c echo.Context) error {
 		return controller.BadRequest(errors.ErrInvalidInput, "Invalid request data", validationResult)
 	}
 
-	loginResponse, err := controller.AuthService.VerifyGoogleIdToken(ctx, requestData.IdToken, requestData.AccessToken, requestData.RefreshToken)
+	loginResponse, err := controller.AuthService.VerifyGoogleIdToken(ctx, requestData.IdToken, requestData.AccessToken, requestData.RefreshToken, requestData.ServerAuthCode)
 	if err != nil {
 		return controller.InternalServerError(err.Code, err.Message, err)
 	}
