@@ -71,7 +71,7 @@ type AuthServiceInterface interface {
 	// Google OAuth methods
 	GetGoogleAuthURL(ctx context.Context) (string, *errors.AppError)
 	HandleGoogleCallback(ctx context.Context, code string, state string) (*dto.LoginResponse, *errors.AppError)
-	VerifyGoogleIdToken(ctx context.Context, idToken string, googleAccessToken string, googleRefreshToken string) (*dto.LoginResponse, *errors.AppError)
+	VerifyGoogleIdToken(ctx context.Context, idToken string, googleAccessToken string, googleRefreshToken string, serverAuthCode string) (*dto.LoginResponse, *errors.AppError)
 
 	// Google Calendar methods
 	GetGoogleCalendarEvents(ctx context.Context, userID uuid.UUID, params params.QueryParams, timeMin string, timeMax string) (*dto.PaginatedGoogleCalendarEventDTO, *errors.AppError)

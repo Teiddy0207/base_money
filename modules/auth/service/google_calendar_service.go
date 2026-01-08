@@ -38,6 +38,27 @@ func (service *AuthService) GetGoogleCalendarEvents(ctx context.Context, userID 
 		return nil, appErr
 	}
 
+	// Filter out events where user is attendee with 'needsAction' status (pending invitations)
+	// These should only appear after user accepts invitation in the app
+	var filteredEvents []dto.GoogleCalendarEvent
+	for _, event := range allEvents {
+		hideEvent := false
+		for _, attendee := range event.Attendees {
+			if attendee.Self && attendee.ResponseStatus == "needsAction" {
+				// Hide only if user is not the organizer
+				if !event.Organizer.Self {
+					hideEvent = true
+					logger.Info("GetGoogleCalendarEvents:FilteredOut", "event_id", event.ID, "reason", "needsAction attendee")
+				}
+				break
+			}
+		}
+		if !hideEvent {
+			filteredEvents = append(filteredEvents, event)
+		}
+	}
+	allEvents = filteredEvents
+
 	totalItems := len(allEvents)
 	offset := (params.PageNumber - 1) * params.PageSize
 	end := offset + params.PageSize

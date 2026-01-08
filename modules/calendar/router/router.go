@@ -33,9 +33,8 @@ func (r *CalendarRouter) Setup(e *echo.Echo, mw *middleware.Middleware) {
 
 	// Events
 	calendarRoutes.POST("/events", r.controller.CreateEvent)
+	calendarRoutes.DELETE("/events/:id", r.controller.DeleteEvent)
 
-	// User-specific busy view
-	userRoutes := v1.Group("/private/users")
-	userRoutes.Use(mw.AuthMiddleware())
-	userRoutes.GET("/:id/calendar/busy", r.controller.GetUserBusy)
+	// Suggested Slots
+	calendarRoutes.POST("/suggested-slots", r.controller.GetSuggestedSlots)
 }
