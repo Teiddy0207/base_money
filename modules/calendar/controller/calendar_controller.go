@@ -146,6 +146,58 @@ func (c *CalendarController) CreateEvent(ctx echo.Context) error {
 	return ctx.JSON(http.StatusCreated, result)
 }
 
+// DeleteEvent deletes or declines a calendar event
+// DELETE /api/v1/private/calendar/events/:id
+func (c *CalendarController) DeleteEvent(ctx echo.Context) error {
+	userID, err := getUserIDFromContext(ctx)
+	if err != nil {
+		return ctx.JSON(http.StatusUnauthorized, errors.NewAppError(errors.ErrUnauthorized, "Invalid user", nil))
+	}
+
+	eventID := ctx.Param("id")
+	if eventID == "" {
+		return ctx.JSON(http.StatusBadRequest, errors.NewAppError(errors.ErrInvalidInput, "Event ID is required", nil))
+	}
+
+	if err := c.service.DeleteEvent(ctx.Request().Context(), userID, eventID); err != nil {
+		return ctx.JSON(http.StatusInternalServerError, errors.NewAppError(errors.ErrInternalServer, err.Error(), err))
+	}
+
+	return ctx.JSON(http.StatusOK, map[string]string{"message": "Event deleted successfully"})
+}
+
+// GetSuggestedSlots finds available meeting time slots
+// POST /api/v1/private/calendar/suggested-slots
+func (c *CalendarController) GetSuggestedSlots(ctx echo.Context) error {
+	// Get current user (event creator)
+	currentUserID, err := getUserIDFromContext(ctx)
+	if err != nil {
+		return ctx.JSON(http.StatusUnauthorized, errors.NewAppError(errors.ErrUnauthorized, "Invalid user", nil))
+	}
+
+	var req dto.SuggestedSlotsRequest
+	if err := ctx.Bind(&req); err != nil {
+		return ctx.JSON(http.StatusBadRequest, errors.NewAppError(errors.ErrInvalidInput, "Invalid request body", nil))
+	}
+
+	// Always include current user (event creator) in the search
+	// Prepend current user ID to ensure creator's calendar is checked
+	allUserIDs := []string{currentUserID.String()}
+	for _, uid := range req.UserIDs {
+		if uid != currentUserID.String() { // Avoid duplicates
+			allUserIDs = append(allUserIDs, uid)
+		}
+	}
+	req.UserIDs = allUserIDs
+
+	result, err := c.service.FindAvailableSlots(ctx.Request().Context(), &req)
+	if err != nil {
+		return ctx.JSON(http.StatusInternalServerError, errors.NewAppError(errors.ErrInternalServer, err.Error(), err))
+	}
+
+	return ctx.JSON(http.StatusOK, result)
+}
+
 // Helper function to get user ID from JWT context
 func getUserIDFromContext(ctx echo.Context) (uuid.UUID, error) {
 	token := ctx.Request().Header.Get("Authorization")

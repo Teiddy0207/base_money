@@ -33,4 +33,8 @@ func (r *CalendarRouter) Setup(e *echo.Echo, mw *middleware.Middleware) {
 
 	// Events
 	calendarRoutes.POST("/events", r.controller.CreateEvent)
+	calendarRoutes.DELETE("/events/:id", r.controller.DeleteEvent)
+
+	// Suggested Slots
+	calendarRoutes.POST("/suggested-slots", r.controller.GetSuggestedSlots)
 }

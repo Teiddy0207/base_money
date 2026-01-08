@@ -10,13 +10,26 @@ type GoogleCalendar struct {
 }
 
 type GoogleCalendarEvent struct {
-	ID          string    `json:"id"`
-	Summary     string    `json:"summary"`
-	Description string    `json:"description"`
-	Start       EventTime `json:"start"`
-	End         EventTime `json:"end"`
-	Location    string    `json:"location"`
-	Status      string    `json:"status"`
+	ID          string          `json:"id"`
+	Summary     string          `json:"summary"`
+	Description string          `json:"description"`
+	Start       EventTime       `json:"start"`
+	End         EventTime       `json:"end"`
+	Location    string          `json:"location"`
+	Status      string          `json:"status"`
+	Attendees   []EventAttendee `json:"attendees"`
+	Organizer   EventOrganizer  `json:"organizer"`
+}
+
+type EventAttendee struct {
+	Email          string `json:"email"`
+	ResponseStatus string `json:"responseStatus"`
+	Self           bool   `json:"self"`
+}
+
+type EventOrganizer struct {
+	Email string `json:"email"`
+	Self  bool   `json:"self"`
 }
 
 type EventTime struct {
