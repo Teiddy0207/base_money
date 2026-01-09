@@ -37,6 +37,7 @@ func (r *BookingRouter) Setup(e *echo.Echo, mw interface{}) {
 			// Personal booking URL endpoint
 			booking := priv.Group("/booking")
 			booking.GET("/personal-url", r.Controller.GetPersonalBookingURL)
+			booking.GET("/week-statistics", r.Controller.GetWeekStatistics)
 		}
 	}
 }

@@ -522,6 +522,47 @@ func (b *BookingController) GetPersonalBookingURL(c echo.Context) error {
 	})
 }
 
+// GetWeekStatistics returns weekly event statistics
+// GET /api/v1/private/booking/week-statistics
+func (b *BookingController) GetWeekStatistics(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	// Get current user ID from context
+	userID, err := b.getUserIDFromContext(c)
+	if err != nil {
+		logger.Error("BookingController:GetWeekStatistics:GetUserIDFromContext:Error", "error", err)
+		return c.JSON(http.StatusUnauthorized, errors.NewAppError(errors.ErrUnauthorized, "User not authenticated", nil))
+	}
+
+	logger.Info("BookingController:GetWeekStatistics:Start", "user_id", userID)
+
+	// Call service to get week statistics
+	result, appErr := b.BookingService.GetWeekStatistics(ctx, userID)
+	if appErr != nil {
+		logger.Error("BookingController:GetWeekStatistics:Service:Error", "error", appErr, "user_id", userID)
+
+		// Map error codes to HTTP status
+		httpStatus := http.StatusInternalServerError
+		if appErr.Code == errors.ErrNotFound {
+			httpStatus = http.StatusNotFound
+		} else if appErr.Code == errors.ErrUnauthorized {
+			httpStatus = http.StatusUnauthorized
+		}
+
+		return c.JSON(httpStatus, errors.NewAppError(appErr.Code, appErr.Message, appErr.Err))
+	}
+
+	logger.Info("BookingController:GetWeekStatistics:Success", "user_id", userID, "total_events", result.TotalEvents, "total_duration_minutes", result.TotalDurationMinutes)
+
+	// Return JSON response with standard format
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"status":    http.StatusOK,
+		"message":   "Lấy thống kê tuần thành công",
+		"data":      result,
+		"timestamp": time.Now(),
+	})
+}
+
 func templateEscape(s string) string {
 	return html.EscapeString(s)
 }
