@@ -11,9 +11,11 @@ import (
 	"go-api-starter/core/config"
 	"go-api-starter/core/constants"
 	"go-api-starter/core/errors"
+	"go-api-starter/core/logger"
 	"go-api-starter/core/utils"
 	authservice "go-api-starter/modules/auth/service"
-	"go-api-starter/modules/calendar/dto"
+	bookingsvc "go-api-starter/modules/booking/service"
+	caldto "go-api-starter/modules/calendar/dto"
 	calsvc "go-api-starter/modules/calendar/service"
 	meetentity "go-api-starter/modules/meeting/entity"
 	meetrepo "go-api-starter/modules/meeting/repository"
@@ -29,10 +31,17 @@ type BookingController struct {
 	AuthService     authservice.AuthServiceInterface
 	MeetingRepo     meetrepo.MeetingRepositoryInterface
 	NotificationSvc *notifsvc.NotificationService
+	BookingService  bookingsvc.BookingService
 }
 
-func NewBookingController(cal calsvc.CalendarService, auth authservice.AuthServiceInterface, meetingRepo meetrepo.MeetingRepositoryInterface, notif *notifsvc.NotificationService) *BookingController {
-	return &BookingController{CalendarService: cal, AuthService: auth, MeetingRepo: meetingRepo, NotificationSvc: notif}
+func NewBookingController(cal calsvc.CalendarService, auth authservice.AuthServiceInterface, meetingRepo meetrepo.MeetingRepositoryInterface, notif *notifsvc.NotificationService, bookingSvc bookingsvc.BookingService) *BookingController {
+	return &BookingController{
+		CalendarService: cal,
+		AuthService:     auth,
+		MeetingRepo:     meetingRepo,
+		NotificationSvc: notif,
+		BookingService:  bookingSvc,
+	}
 }
 
 func (b *BookingController) PublicPage(c echo.Context) error {
@@ -289,7 +298,7 @@ func (b *BookingController) PublicSuggestedSlots(c echo.Context) error {
 	if appErr != nil {
 		return c.JSON(http.StatusNotFound, appErr)
 	}
-	var req dto.SuggestedSlotsRequest
+	var req caldto.SuggestedSlotsRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, errors.NewAppError(errors.ErrInvalidInput, "invalid body", nil))
 	}
@@ -457,6 +466,62 @@ func tryParseUUID(s string) (uuid.UUID, bool) {
 	return id, true
 }
 
+// getUserIDFromContext extracts user ID from JWT context
+func (b *BookingController) getUserIDFromContext(c echo.Context) (uuid.UUID, error) {
+	tokenData := c.Get(constants.ContextTokenData)
+	if tokenData == nil {
+		return uuid.Nil, errors.NewAppError(errors.ErrUnauthorized, "User not authenticated", nil)
+	}
+
+	claims, ok := tokenData.(*utils.TokenClaims)
+	if !ok {
+		return uuid.Nil, errors.NewAppError(errors.ErrUnauthorized, "Invalid token data", nil)
+	}
+
+	return claims.UserID, nil
+}
+
+// GetPersonalBookingURL returns the personal booking page URL for the authenticated user
+// GET /api/v1/private/booking/personal-url
+func (b *BookingController) GetPersonalBookingURL(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	// Get current user ID from context
+	userID, err := b.getUserIDFromContext(c)
+	if err != nil {
+		logger.Error("BookingController:GetPersonalBookingURL:GetUserIDFromContext:Error", "error", err)
+		return c.JSON(http.StatusUnauthorized, errors.NewAppError(errors.ErrUnauthorized, "User not authenticated", nil))
+	}
+
+	logger.Info("BookingController:GetPersonalBookingURL:Start", "user_id", userID)
+
+	// Call service to get personal booking URL
+	result, appErr := b.BookingService.GetPersonalBookingURL(ctx, userID)
+	if appErr != nil {
+		logger.Error("BookingController:GetPersonalBookingURL:Service:Error", "error", appErr, "user_id", userID)
+
+		// Map error codes to HTTP status
+		httpStatus := http.StatusInternalServerError
+		if appErr.Code == errors.ErrNotFound {
+			httpStatus = http.StatusNotFound
+		} else if appErr.Code == errors.ErrUnauthorized {
+			httpStatus = http.StatusUnauthorized
+		}
+
+		return c.JSON(httpStatus, errors.NewAppError(appErr.Code, appErr.Message, appErr.Err))
+	}
+
+	logger.Info("BookingController:GetPersonalBookingURL:Success", "user_id", userID, "url", result.URL)
+
+	// Return JSON response with standard format
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"status":    http.StatusOK,
+		"message":   "Lấy URL đặt lịch thành công",
+		"data":      result,
+		"timestamp": time.Now(),
+	})
+}
+
 func templateEscape(s string) string {
 	return html.EscapeString(s)
 }
@@ -545,7 +610,7 @@ func (b *BookingController) PrivateAcceptRequest(c echo.Context) error {
 		_ = json.Unmarshal([]byte(*ev.Preferences), &p)
 		guestEmail = strings.TrimSpace(p.GuestEmail)
 	}
-	req := &dto.CreateEventRequest{
+	req := &caldto.CreateEventRequest{
 		Title:       ev.Title,
 		Description: "Personal booking",
 		StartTime:   ev.StartDate.Format(time.RFC3339),
@@ -680,7 +745,7 @@ func (b *BookingController) PublicTokenAccept(c echo.Context) error {
 		_ = json.Unmarshal([]byte(*ev.Preferences), &p)
 		guestEmail = strings.TrimSpace(p.GuestEmail)
 	}
-	req := &dto.CreateEventRequest{
+	req := &caldto.CreateEventRequest{
 		Title:       ev.Title,
 		Description: "Personal booking",
 		StartTime:   ev.StartDate.Format(time.RFC3339),
@@ -732,7 +797,7 @@ func (b *BookingController) PublicTokenDecline(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, map[string]any{"message": "declined"})
 }
-func computeFreeSlots(start, end time.Time, busy []dto.TimeSlot, interval int, window string) []map[string]string {
+func computeFreeSlots(start, end time.Time, busy []caldto.TimeSlot, interval int, window string) []map[string]string {
 	occupied := make([][2]time.Time, 0, len(busy))
 	for _, b := range busy {
 		st, err1 := time.Parse(time.RFC3339, b.Start)
