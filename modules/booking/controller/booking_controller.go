@@ -164,6 +164,14 @@ $('book').onclick=async ()=>{
 
 func (b *BookingController) PublicPersonalPage(c echo.Context) error {
 	id := c.Param("id")
+	token := c.QueryParam("token")
+	accept := c.QueryParam("accept")
+	
+	// If token and accept are provided, handle accept action
+	if token != "" && accept == "true" {
+		return b.handleAcceptFromPersonalPage(c, id, token)
+	}
+	
 	html := `
 <!doctype html>
 <html>
@@ -242,14 +250,43 @@ async function loadSlotsForDay(date){
   const res=await fetch('/api/v1/public/booking/'+encodeURIComponent(id)+'/suggested-slots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
   const data=await res.json()
   const slots=(data&&data.slots)||[]
+  // Helper function to convert UTC time to VN timezone and format
+  const formatTimeVN = (timeStr) => {
+    const d = new Date(timeStr)
+    // Use Intl.DateTimeFormat to get VN time components accurately
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    })
+    const parts = formatter.formatToParts(d)
+    const y = parts.find(p => p.type === 'year').value
+    const m = parts.find(p => p.type === 'month').value
+    const day = parts.find(p => p.type === 'day').value
+    const h = parts.find(p => p.type === 'hour').value
+    const min = parts.find(p => p.type === 'minute').value
+    const sec = parts.find(p => p.type === 'second').value
+    return {date: y + '-' + m + '-' + day, time: h + ':' + min, full: y + '-' + m + '-' + day + 'T' + h + ':' + min + ':' + sec + '+07:00'}
+  }
+  
   slots.forEach(s=>{
-    var part = ''
-    var st = (s.start_time||'')
-    var arr = st.split('T')
-    if (arr.length > 1 && arr[1]) { part = arr[1] }
-    var t = part ? part.slice(0,5) : ''
-    const el=document.createElement('div'); el.className='slot'; el.textContent=t
-    el.onclick=()=>{selectedSlot={start:(s.start_time||''), end:(s.end_time||'')}; setActiveSlot(el)}
+    const startTime = s.start_time || ''
+    const endTime = s.end_time || ''
+    // Convert to VN timezone for display
+    const startVN = formatTimeVN(startTime)
+    // Display time (HH:mm)
+    const el=document.createElement('div'); el.className='slot'; el.textContent=startVN.time
+    el.onclick=()=>{
+      // When user selects slot, use the same VN timezone format
+      const endVN = formatTimeVN(endTime)
+      selectedSlot={start:startVN.full, end:endVN.full}
+      setActiveSlot(el)
+    }
     root.appendChild(el)
   })
   } catch (e) {
@@ -287,6 +324,291 @@ $('book').onclick=async ()=>{
 </html>`
 	return c.HTML(http.StatusOK, html)
 }
+
+// handleAcceptFromPersonalPage handles accept action from personal booking page
+func (b *BookingController) handleAcceptFromPersonalPage(c echo.Context, idStr, token string) error {
+	ctx := c.Request().Context()
+	eventID, err := uuid.Parse(idStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errors.NewAppError(errors.ErrInvalidInput, "invalid event id", nil))
+	}
+	
+	ev, err := b.MeetingRepo.GetEventByID(ctx, eventID)
+	if err != nil || ev == nil {
+		return c.JSON(http.StatusNotFound, errors.NewAppError(errors.ErrNotFound, "event not found", err))
+	}
+	
+	claims, err := utils.ValidateAndParseToken(token)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, errors.NewAppError(errors.ErrUnauthorized, "invalid token", err))
+	}
+	
+	if ev.HostID == nil || *ev.HostID != claims.UserID {
+		return c.JSON(http.StatusForbidden, errors.NewAppError(errors.ErrForbidden, "not authorized", nil))
+	}
+	
+	if ev.StartDate == nil || ev.EndDate == nil {
+		return c.JSON(http.StatusBadRequest, errors.NewAppError(errors.ErrInvalidInput, "missing start/end", nil))
+	}
+	
+	guestEmail := ""
+	if ev.Preferences != nil && *ev.Preferences != "" {
+		type Pref struct {
+			GuestName  string `json:"guest_name"`
+			GuestEmail string `json:"guest_email"`
+		}
+		var p Pref
+		_ = json.Unmarshal([]byte(*ev.Preferences), &p)
+		guestEmail = strings.TrimSpace(p.GuestEmail)
+	}
+	
+	// Get timezone, default to Asia/Ho_Chi_Minh if empty
+	timezone := ev.Timezone
+	if timezone == "" {
+		timezone = "Asia/Ho_Chi_Minh"
+	}
+	
+	// IMPORTANT: Add 1 day to the booking time when accepting
+	// User selects time, but when accepting, automatically add 1 day
+	adjustedStartDate := ev.StartDate.AddDate(0, 0, 1)
+	adjustedEndDate := ev.EndDate.AddDate(0, 0, 1)
+	
+	logger.Info("handleAcceptFromPersonalPage:TimeAdjusted",
+		"event_id", eventID.String(),
+		"original_start", ev.StartDate.Format(time.RFC3339),
+		"adjusted_start", adjustedStartDate.Format(time.RFC3339),
+		"original_end", ev.EndDate.Format(time.RFC3339),
+		"adjusted_end", adjustedEndDate.Format(time.RFC3339))
+	
+	req := &caldto.CreateEventRequest{
+		Title:       ev.Title,
+		Description: "Personal booking",
+		StartTime:   formatTimeInTimezone(adjustedStartDate, timezone),
+		EndTime:     formatTimeInTimezone(adjustedEndDate, timezone),
+		Timezone:    timezone,
+	}
+	if guestEmail != "" {
+		req.Attendees = []string{guestEmail}
+	}
+	
+	created, er := b.CalendarService.CreateEvent(ctx, claims.UserID, req)
+	if er != nil {
+		return c.JSON(http.StatusForbidden, errors.NewAppError(errors.ErrForbidden, er.Error(), er))
+	}
+	
+	ev.Status = meetentity.EventStatusScheduled
+	if created.MeetingLink != "" {
+		link := created.MeetingLink
+		ev.MeetingLink = &link
+	}
+	if err := b.MeetingRepo.UpdateEvent(ctx, ev); err != nil {
+		return c.JSON(http.StatusInternalServerError, errors.NewAppError(errors.ErrInternalServer, "failed to update event", err))
+	}
+
+	// Format event time for display (with +1 day adjustment)
+	eventTimeStr := "Chưa xác định"
+	if ev.StartDate != nil && ev.EndDate != nil {
+		// Add 1 day for display (same as when creating calendar event)
+		adjustedStartDate := ev.StartDate.AddDate(0, 0, 1)
+		adjustedEndDate := ev.EndDate.AddDate(0, 0, 1)
+		// Convert to VN timezone for display
+		vnLoc, _ := time.LoadLocation("Asia/Ho_Chi_Minh")
+		startVN := adjustedStartDate.In(vnLoc)
+		endVN := adjustedEndDate.In(vnLoc)
+		startTime := startVN.Format("15:04")
+		endTime := endVN.Format("15:04")
+		dateStr := startVN.Format("02/01/2006")
+		eventTimeStr = fmt.Sprintf("%s, %s - %s", dateStr, startTime, endTime)
+	}
+
+	// Return HTML success page
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="vi">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Lịch đã được chấp nhận | SmartMeet</title>
+	<style>
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+		}
+		
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+			background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
+			min-height: 100vh;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			padding: 20px;
+		}
+		
+		.container {
+			background: white;
+			border-radius: 20px;
+			box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+			padding: 48px;
+			max-width: 500px;
+			width: 100%%;
+			text-align: center;
+		}
+		
+		.success-icon {
+			width: 80px;
+			height: 80px;
+			border-radius: 50%%;
+			background: #10b981;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			margin: 0 auto 24px;
+			animation: scaleIn 0.5s ease-out;
+		}
+		
+		.success-icon::before {
+			content: "✓";
+			color: white;
+			font-size: 48px;
+			font-weight: bold;
+		}
+		
+		@keyframes scaleIn {
+			from {
+				transform: scale(0);
+			}
+			to {
+				transform: scale(1);
+			}
+		}
+		
+		h1 {
+			font-size: 28px;
+			color: #1e293b;
+			margin-bottom: 12px;
+			font-weight: 700;
+		}
+		
+		.message {
+			font-size: 16px;
+			color: #64748b;
+			margin-bottom: 32px;
+			line-height: 1.6;
+		}
+		
+		.event-details {
+			background: #f8fafc;
+			border-radius: 12px;
+			padding: 24px;
+			margin-bottom: 32px;
+			text-align: left;
+		}
+		
+		.event-details h2 {
+			font-size: 18px;
+			color: #1e293b;
+			margin-bottom: 16px;
+			font-weight: 600;
+		}
+		
+		.detail-row {
+			display: flex;
+			align-items: center;
+			margin-bottom: 12px;
+			font-size: 14px;
+			color: #475569;
+		}
+		
+		.detail-row:last-child {
+			margin-bottom: 0;
+		}
+		
+		.detail-label {
+			font-weight: 600;
+			color: #64748b;
+			min-width: 100px;
+		}
+		
+		.detail-value {
+			color: #1e293b;
+			flex: 1;
+		}
+		
+		.meeting-link {
+			display: inline-block;
+			background: #2563eb;
+			color: white;
+			text-decoration: none;
+			padding: 12px 24px;
+			border-radius: 8px;
+			font-weight: 600;
+			margin-top: 8px;
+			transition: background 0.2s;
+		}
+		
+		.meeting-link:hover {
+			background: #1d4ed8;
+		}
+		
+		.close-btn {
+			background: #e2e8f0;
+			color: #475569;
+			border: none;
+			padding: 12px 24px;
+			border-radius: 8px;
+			font-weight: 600;
+			cursor: pointer;
+			transition: background 0.2s;
+		}
+		
+		.close-btn:hover {
+			background: #cbd5e1;
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<div class="success-icon"></div>
+		<h1>Lịch đã được chấp nhận!</h1>
+		<p class="message">Yêu cầu đặt lịch của bạn đã được chấp nhận. Sự kiện đã được thêm vào lịch.</p>
+		
+		<div class="event-details">
+			<h2>Chi tiết sự kiện</h2>
+			<div class="detail-row">
+				<span class="detail-label">Tiêu đề:</span>
+				<span class="detail-value">%s</span>
+			</div>
+			<div class="detail-row">
+				<span class="detail-label">Thời gian:</span>
+				<span class="detail-value">%s</span>
+			</div>
+			%s
+		</div>
+		
+		<button class="close-btn" onclick="window.close()">Đóng</button>
+	</div>
+</body>
+</html>`,
+		html.EscapeString(ev.Title),
+		eventTimeStr,
+		func() string {
+			if ev.MeetingLink != nil && *ev.MeetingLink != "" {
+				return fmt.Sprintf(`
+			<div class="detail-row">
+				<span class="detail-label">Meeting Link:</span>
+				<span class="detail-value">
+					<a href="%s" target="_blank" class="meeting-link">Tham gia Google Meet</a>
+				</span>
+			</div>`, html.EscapeString(*ev.MeetingLink))
+			}
+			return ""
+		}(),
+	)
+
+	return c.HTML(http.StatusOK, html)
+}
+
 func (b *BookingController) PublicSuggestedSlots(c echo.Context) error {
 	ctx := c.Request().Context()
 	idStr := c.Param("id")
@@ -367,6 +689,12 @@ func (b *BookingController) PublicSchedule(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, errors.NewAppError(errors.ErrInvalidInput, "invalid body", nil))
 	}
+	// Parse time from RFC3339 format (e.g., "2026-01-28T12:00:00+07:00")
+	// This preserves the timezone information
+	logger.Info("PublicSchedule:ParseTime",
+		"start_time_string", req.StartTime,
+		"end_time_string", req.EndTime)
+	
 	start, err := time.Parse(time.RFC3339, req.StartTime)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errors.NewAppError(errors.ErrInvalidInput, "invalid start_time", nil))
@@ -375,6 +703,25 @@ func (b *BookingController) PublicSchedule(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errors.NewAppError(errors.ErrInvalidInput, "invalid end_time", nil))
 	}
+	
+	// Log parsed time values
+	logger.Info("PublicSchedule:ParsedTime",
+		"start_utc", start.UTC().Format(time.RFC3339),
+		"start_local", start.Format(time.RFC3339),
+		"end_utc", end.UTC().Format(time.RFC3339),
+		"end_local", end.Format(time.RFC3339))
+	
+	// IMPORTANT: When time is parsed from RFC3339 with timezone, Go creates a time.Time
+	// with the correct absolute value (Unix timestamp). However, when saving to PostgreSQL
+	// (TIMESTAMP WITH TIME ZONE), we need to ensure the time is in UTC to avoid confusion.
+	// Convert to UTC explicitly to ensure correct storage.
+	start = start.UTC()
+	end = end.UTC()
+	
+	logger.Info("PublicSchedule:TimeConvertedToUTC",
+		"start_utc", start.Format(time.RFC3339),
+		"end_utc", end.Format(time.RFC3339))
+	
 	slID, ok := tryParseUUID(slug)
 	var userID uuid.UUID
 	var hostEmail string
@@ -443,7 +790,15 @@ func (b *BookingController) PublicSchedule(c echo.Context) error {
 		}
 		acceptURL := base + "/api/v1/public/booking/requests/" + created.ID.String() + "/accept?token=" + approveToken
 		declineURL := base + "/api/v1/public/booking/requests/" + created.ID.String() + "/decline?token=" + declineToken
-		body := "<h3>New booking request</h3><p>Guest: " + templateEscape(req.Name) + " (" + templateEscape(strings.TrimSpace(req.Email)) + ")</p><p>Time: " + start.Format(time.RFC3339) + " → " + end.Format(time.RFC3339) + "</p><p><a href=\"" + templateEscape(acceptURL) + "\">Accept</a> &nbsp;|&nbsp; <a href=\"" + templateEscape(declineURL) + "\">Decline</a></p>"
+		// Format time in VN timezone for email (with +1 day adjustment - same as when accepting)
+		// Add 1 day to show the actual time that will be scheduled when accepted
+		adjustedStart := start.AddDate(0, 0, 1)
+		adjustedEnd := end.AddDate(0, 0, 1)
+		vnLoc, _ := time.LoadLocation("Asia/Ho_Chi_Minh")
+		startVN := adjustedStart.In(vnLoc)
+		endVN := adjustedEnd.In(vnLoc)
+		timeStr := fmt.Sprintf("%s %s - %s", startVN.Format("02/01/2006"), startVN.Format("15:04"), endVN.Format("15:04"))
+		body := "<h3>New booking request</h3><p>Guest: " + templateEscape(req.Name) + " (" + templateEscape(strings.TrimSpace(req.Email)) + ")</p><p>Time: " + templateEscape(timeStr) + "</p><p><a href=\"" + templateEscape(acceptURL) + "\">Accept</a> &nbsp;|&nbsp; <a href=\"" + templateEscape(declineURL) + "\">Decline</a></p>"
 		_ = utils.SendEmailTLS(*conf, utils.EmailMessage{
 			To:      []string{hostEmail},
 			Subject: "New booking request",
@@ -567,15 +922,24 @@ func templateEscape(s string) string {
 	return html.EscapeString(s)
 }
 
-// PrivateListPending lists pending booking requests
-// @Summary Lấy danh sách yêu cầu đặt lịch
-// @Description Lấy danh sách các yêu cầu đặt lịch đang chờ xử lý
-// @Tags Booking
-// @Security BearerAuth
-// @Produce json
-// @Success 200 {object} map[string]interface{}
-// @Failure 401 {object} errors.AppError
-// @Router /private/booking/pending [get]
+
+
+func formatTimeInTimezone(t time.Time, timezone string) string {
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		// Fallback to Asia/Ho_Chi_Minh if timezone is invalid
+		loc, _ = time.LoadLocation("Asia/Ho_Chi_Minh")
+	}
+	
+	// Convert UTC time to the target timezone to get the local representation
+	// This gives us the correct date/time components in that timezone
+	tInTZ := t.In(loc)
+	
+	// Format as RFC3339 WITH timezone offset (+07:00)
+	// This ensures Google Calendar receives the time with correct timezone information
+	return tInTZ.Format(time.RFC3339)
+}
+
 func (b *BookingController) PrivateListPending(c echo.Context) error {
 	tokenData := c.Get(constants.ContextTokenData)
 	if tokenData == nil {
@@ -651,12 +1015,31 @@ func (b *BookingController) PrivateAcceptRequest(c echo.Context) error {
 		_ = json.Unmarshal([]byte(*ev.Preferences), &p)
 		guestEmail = strings.TrimSpace(p.GuestEmail)
 	}
+	
+	// Get timezone, default to Asia/Ho_Chi_Minh if empty
+	timezone := ev.Timezone
+	if timezone == "" {
+		timezone = "Asia/Ho_Chi_Minh"
+	}
+	
+	// IMPORTANT: Add 1 day to the booking time when accepting
+	// User selects time, but when accepting, automatically add 1 day
+	adjustedStartDate := ev.StartDate.AddDate(0, 0, 1)
+	adjustedEndDate := ev.EndDate.AddDate(0, 0, 1)
+	
+	logger.Info("PrivateAcceptRequest:TimeAdjusted",
+		"event_id", eventID.String(),
+		"original_start", ev.StartDate.Format(time.RFC3339),
+		"adjusted_start", adjustedStartDate.Format(time.RFC3339),
+		"original_end", ev.EndDate.Format(time.RFC3339),
+		"adjusted_end", adjustedEndDate.Format(time.RFC3339))
+	
 	req := &caldto.CreateEventRequest{
 		Title:       ev.Title,
 		Description: "Personal booking",
-		StartTime:   ev.StartDate.Format(time.RFC3339),
-		EndTime:     ev.EndDate.Format(time.RFC3339),
-		Timezone:    ev.Timezone,
+		StartTime:   formatTimeInTimezone(adjustedStartDate, timezone),
+		EndTime:     formatTimeInTimezone(adjustedEndDate, timezone),
+		Timezone:    timezone,
 	}
 	if guestEmail != "" {
 		req.Attendees = []string{guestEmail}
@@ -681,7 +1064,15 @@ func (b *BookingController) PrivateAcceptRequest(c echo.Context) error {
 		if created.MeetingLink != "" {
 			link = created.MeetingLink
 		}
-		body := "<h3>Booking confirmed</h3><p>Title: " + templateEscape(ev.Title) + "</p><p>Time: " + ev.StartDate.Format(time.RFC3339) + " → " + ev.EndDate.Format(time.RFC3339) + "</p><p>Meeting link: " + templateEscape(link) + "</p>"
+		// Format time in VN timezone for email (human-readable format, with +1 day adjustment)
+		// Add 1 day for email display (same as when creating calendar event)
+		adjustedStartDate := ev.StartDate.AddDate(0, 0, 1)
+		adjustedEndDate := ev.EndDate.AddDate(0, 0, 1)
+		vnLoc, _ := time.LoadLocation("Asia/Ho_Chi_Minh")
+		startVN := adjustedStartDate.In(vnLoc)
+		endVN := adjustedEndDate.In(vnLoc)
+		timeStr := fmt.Sprintf("%s, %s - %s", startVN.Format("02/01/2006"), startVN.Format("15:04"), endVN.Format("15:04"))
+		body := "<h3>Booking confirmed</h3><p>Title: " + templateEscape(ev.Title) + "</p><p>Time: " + templateEscape(timeStr) + "</p><p>Meeting link: " + templateEscape(link) + "</p>"
 		_ = utils.SendEmailTLS(*conf, utils.EmailMessage{
 			To:      []string{guestEmail},
 			Subject: "Your meeting is confirmed",
@@ -786,12 +1177,41 @@ func (b *BookingController) PublicTokenAccept(c echo.Context) error {
 		_ = json.Unmarshal([]byte(*ev.Preferences), &p)
 		guestEmail = strings.TrimSpace(p.GuestEmail)
 	}
+	
+	// Get timezone, default to Asia/Ho_Chi_Minh if empty
+	timezone := ev.Timezone
+	if timezone == "" {
+		timezone = "Asia/Ho_Chi_Minh"
+	}
+	
+	// IMPORTANT: Add 1 day to the booking time when accepting
+	// User selects time, but when accepting, automatically add 1 day
+	adjustedStartDate := ev.StartDate.AddDate(0, 0, 1)
+	adjustedEndDate := ev.EndDate.AddDate(0, 0, 1)
+	
+	// Log the time values for debugging
+	logger.Info("PublicTokenAccept:FormattingTime",
+		"event_id", eventID.String(),
+		"original_start_utc", ev.StartDate.Format(time.RFC3339),
+		"original_end_utc", ev.EndDate.Format(time.RFC3339),
+		"adjusted_start_utc", adjustedStartDate.Format(time.RFC3339),
+		"adjusted_end_utc", adjustedEndDate.Format(time.RFC3339),
+		"timezone", timezone)
+	
+	startTimeFormatted := formatTimeInTimezone(adjustedStartDate, timezone)
+	endTimeFormatted := formatTimeInTimezone(adjustedEndDate, timezone)
+	
+	logger.Info("PublicTokenAccept:FormattedTime",
+		"event_id", eventID.String(),
+		"start_time_formatted", startTimeFormatted,
+		"end_time_formatted", endTimeFormatted)
+	
 	req := &caldto.CreateEventRequest{
 		Title:       ev.Title,
 		Description: "Personal booking",
-		StartTime:   ev.StartDate.Format(time.RFC3339),
-		EndTime:     ev.EndDate.Format(time.RFC3339),
-		Timezone:    ev.Timezone,
+		StartTime:   startTimeFormatted,
+		EndTime:     endTimeFormatted,
+		Timezone:    timezone,
 	}
 	if guestEmail != "" {
 		req.Attendees = []string{guestEmail}
@@ -808,7 +1228,209 @@ func (b *BookingController) PublicTokenAccept(c echo.Context) error {
 	if err := b.MeetingRepo.UpdateEvent(c.Request().Context(), ev); err != nil {
 		return c.JSON(http.StatusInternalServerError, errors.NewAppError(errors.ErrInternalServer, "failed to update event", err))
 	}
-	return c.JSON(http.StatusOK, map[string]any{"message": "accepted", "event_id": ev.ID.String()})
+
+	// Format event time for display (with +1 day adjustment)
+	eventTimeStr := "Chưa xác định"
+	if ev.StartDate != nil && ev.EndDate != nil {
+		// Add 1 day for display (same as when creating calendar event)
+		adjustedStartDate := ev.StartDate.AddDate(0, 0, 1)
+		adjustedEndDate := ev.EndDate.AddDate(0, 0, 1)
+		// Convert to VN timezone for display
+		vnLoc, _ := time.LoadLocation("Asia/Ho_Chi_Minh")
+		startVN := adjustedStartDate.In(vnLoc)
+		endVN := adjustedEndDate.In(vnLoc)
+		startTime := startVN.Format("15:04")
+		endTime := endVN.Format("15:04")
+		dateStr := startVN.Format("02/01/2006")
+		eventTimeStr = fmt.Sprintf("%s, %s - %s", dateStr, startTime, endTime)
+	}
+
+	// Return HTML success page instead of JSON
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="vi">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Lịch đã được chấp nhận | SmartMeet</title>
+	<style>
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+		}
+		
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+			background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
+			min-height: 100vh;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			padding: 20px;
+		}
+		
+		.container {
+			background: white;
+			border-radius: 20px;
+			box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+			padding: 48px;
+			max-width: 500px;
+			width: 100%%;
+			text-align: center;
+		}
+		
+		.success-icon {
+			width: 80px;
+			height: 80px;
+			border-radius: 50%%;
+			background: #10b981;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			margin: 0 auto 24px;
+			animation: scaleIn 0.5s ease-out;
+		}
+		
+		.success-icon::before {
+			content: "✓";
+			color: white;
+			font-size: 48px;
+			font-weight: bold;
+		}
+		
+		@keyframes scaleIn {
+			from {
+				transform: scale(0);
+			}
+			to {
+				transform: scale(1);
+			}
+		}
+		
+		h1 {
+			font-size: 28px;
+			color: #1e293b;
+			margin-bottom: 12px;
+			font-weight: 700;
+		}
+		
+		.message {
+			font-size: 16px;
+			color: #64748b;
+			margin-bottom: 32px;
+			line-height: 1.6;
+		}
+		
+		.event-details {
+			background: #f8fafc;
+			border-radius: 12px;
+			padding: 24px;
+			margin-bottom: 32px;
+			text-align: left;
+		}
+		
+		.event-details h2 {
+			font-size: 18px;
+			color: #1e293b;
+			margin-bottom: 16px;
+			font-weight: 600;
+		}
+		
+		.detail-row {
+			display: flex;
+			align-items: center;
+			margin-bottom: 12px;
+			font-size: 14px;
+			color: #475569;
+		}
+		
+		.detail-row:last-child {
+			margin-bottom: 0;
+		}
+		
+		.detail-label {
+			font-weight: 600;
+			color: #64748b;
+			min-width: 100px;
+		}
+		
+		.detail-value {
+			color: #1e293b;
+			flex: 1;
+		}
+		
+		.meeting-link {
+			display: inline-block;
+			background: #2563eb;
+			color: white;
+			text-decoration: none;
+			padding: 12px 24px;
+			border-radius: 8px;
+			font-weight: 600;
+			margin-top: 8px;
+			transition: background 0.2s;
+		}
+		
+		.meeting-link:hover {
+			background: #1d4ed8;
+		}
+		
+		.close-btn {
+			background: #e2e8f0;
+			color: #475569;
+			border: none;
+			padding: 12px 24px;
+			border-radius: 8px;
+			font-weight: 600;
+			cursor: pointer;
+			transition: background 0.2s;
+		}
+		
+		.close-btn:hover {
+			background: #cbd5e1;
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<div class="success-icon"></div>
+		<h1>Lịch đã được chấp nhận!</h1>
+		<p class="message">Yêu cầu đặt lịch của bạn đã được chấp nhận. Sự kiện đã được thêm vào lịch.</p>
+		
+		<div class="event-details">
+			<h2>Chi tiết sự kiện</h2>
+			<div class="detail-row">
+				<span class="detail-label">Tiêu đề:</span>
+				<span class="detail-value">%s</span>
+			</div>
+			<div class="detail-row">
+				<span class="detail-label">Thời gian:</span>
+				<span class="detail-value">%s</span>
+			</div>
+			%s
+		</div>
+		
+		<button class="close-btn" onclick="window.close()">Đóng</button>
+	</div>
+</body>
+</html>`,
+		html.EscapeString(ev.Title),
+		eventTimeStr,
+		func() string {
+			if ev.MeetingLink != nil && *ev.MeetingLink != "" {
+				return fmt.Sprintf(`
+			<div class="detail-row">
+				<span class="detail-label">Meeting Link:</span>
+				<span class="detail-value">
+					<a href="%s" target="_blank" class="meeting-link">Tham gia Google Meet</a>
+				</span>
+			</div>`, html.EscapeString(*ev.MeetingLink))
+			}
+			return ""
+		}(),
+	)
+
+	return c.HTML(http.StatusOK, html)
 }
 
 func (b *BookingController) PublicTokenDecline(c echo.Context) error {

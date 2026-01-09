@@ -578,7 +578,9 @@ func (s *calendarService) FindAvailableSlots(ctx context.Context, req *dto.Sugge
 	}
 
 	// Calculate time range
-	now := time.Now()
+	// Use Asia/Ho_Chi_Minh timezone for all time calculations
+	vnLoc, _ := time.LoadLocation("Asia/Ho_Chi_Minh")
+	now := time.Now().In(vnLoc)
 	var startTime, endTime time.Time
 
 	// Use start_date if provided, otherwise start from now
@@ -586,18 +588,18 @@ func (s *calendarService) FindAvailableSlots(ctx context.Context, req *dto.Sugge
 		// Parse start_date (YYYY-MM-DD format)
 		parsedDate, err := time.Parse("2006-01-02", req.StartDate)
 		if err == nil {
-			startTime = time.Date(parsedDate.Year(), parsedDate.Month(), parsedDate.Day(), 0, 0, 0, 0, now.Location())
+			startTime = time.Date(parsedDate.Year(), parsedDate.Month(), parsedDate.Day(), 0, 0, 0, 0, vnLoc)
 			// If start date is today and time has passed, start from next hour
 			if startTime.Year() == now.Year() && startTime.Month() == now.Month() && startTime.Day() == now.Day() {
-				startTime = time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, now.Location())
+				startTime = time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, vnLoc)
 			}
 		} else {
 			// Fallback to current hour
-			startTime = time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, now.Location())
+			startTime = time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, vnLoc)
 		}
 	} else {
 		// Default: start from next hour today
-		startTime = time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, now.Location())
+		startTime = time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, vnLoc)
 	}
 
 	endTime = startTime.Add(time.Duration(req.DaysAhead) * 24 * time.Hour)
@@ -720,9 +722,15 @@ func (s *calendarService) FindAvailableSlots(ctx context.Context, req *dto.Sugge
 			continue
 		}
 
+		// Format time with Asia/Ho_Chi_Minh timezone (+07:00)
+		// Convert candidate time to VN timezone before formatting
+		vnLoc, _ := time.LoadLocation("Asia/Ho_Chi_Minh")
+		startVN := candidate.start.In(vnLoc)
+		endVN := candidate.end.In(vnLoc)
+		
 		slots = append(slots, dto.SuggestedSlot{
-			StartTime:      candidate.start.Format(time.RFC3339),
-			EndTime:        candidate.end.Format(time.RFC3339),
+			StartTime:      startVN.Format(time.RFC3339),
+			EndTime:        endVN.Format(time.RFC3339),
 			Score:          100,
 			AvailableCount: connectedCount,
 			TotalCount:     connectedCount,
