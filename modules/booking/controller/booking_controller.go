@@ -461,6 +461,15 @@ func templateEscape(s string) string {
 	return html.EscapeString(s)
 }
 
+// PrivateListPending lists pending booking requests
+// @Summary Lấy danh sách yêu cầu đặt lịch
+// @Description Lấy danh sách các yêu cầu đặt lịch đang chờ xử lý
+// @Tags Booking
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} errors.AppError
+// @Router /private/booking/pending [get]
 func (b *BookingController) PrivateListPending(c echo.Context) error {
 	tokenData := c.Get(constants.ContextTokenData)
 	if tokenData == nil {
@@ -490,6 +499,17 @@ func (b *BookingController) PrivateListPending(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"items": res})
 }
 
+// PrivateAcceptRequest accepts a booking request
+// @Summary Chấp nhận yêu cầu đặt lịch
+// @Description Chấp nhận yêu cầu đặt lịch và tạo sự kiện trên Calendar
+// @Tags Booking
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "Event ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} errors.AppError
+// @Failure 401 {object} errors.AppError
+// @Router /private/booking/{id}/accept [post]
 func (b *BookingController) PrivateAcceptRequest(c echo.Context) error {
 	tokenData := c.Get(constants.ContextTokenData)
 	if tokenData == nil {
@@ -566,6 +586,17 @@ func (b *BookingController) PrivateAcceptRequest(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"message": "accepted", "event_id": ev.ID.String()})
 }
 
+// PrivateDeclineRequest declines a booking request
+// @Summary Từ chối yêu cầu đặt lịch
+// @Description Từ chối yêu cầu đặt lịch
+// @Tags Booking
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "Event ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} errors.AppError
+// @Failure 401 {object} errors.AppError
+// @Router /private/booking/{id}/decline [post]
 func (b *BookingController) PrivateDeclineRequest(c echo.Context) error {
 	tokenData := c.Get(constants.ContextTokenData)
 	if tokenData == nil {

@@ -8,7 +8,16 @@ import (
 )
 
 // SearchSocialUsers searches for users from social_logins table
-// GET /api/v1/private/auth/users/search?q=keyword
+// @Summary Tìm kiếm người dùng
+// @Description Tìm kiếm người dùng theo từ khóa (tên, email)
+// @Tags Users
+// @Security BearerAuth
+// @Produce json
+// @Param q query string true "Từ khóa tìm kiếm"
+// @Success 200 {array} repository.SocialUserResult
+// @Failure 401 {object} errors.AppError
+// @Failure 500 {object} errors.AppError
+// @Router /private/auth/users/search [get]
 func (a *AuthController) SearchSocialUsers(c echo.Context) error {
 	query := c.QueryParam("q")
 
@@ -22,7 +31,15 @@ func (a *AuthController) SearchSocialUsers(c echo.Context) error {
 }
 
 // GetAllSocialUsers gets all users from social_logins table
-// GET /api/v1/private/auth/users/social
+// @Summary Lấy tất cả người dùng
+// @Description Lấy danh sách tất cả người dùng đã đăng ký qua social login
+// @Tags Users
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {array} repository.SocialUserResult
+// @Failure 401 {object} errors.AppError
+// @Failure 500 {object} errors.AppError
+// @Router /private/auth/users/social [get]
 func (a *AuthController) GetAllSocialUsers(c echo.Context) error {
 	users, err := a.AuthService.GetAllSocialUsers(c.Request().Context())
 	if err != nil {

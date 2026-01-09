@@ -23,6 +23,221 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/private/auth/users/search": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tìm kiếm người dùng theo từ khóa (tên, email)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Tìm kiếm người dùng",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Từ khóa tìm kiếm",
+                        "name": "q",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/repository.SocialUserResult"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            }
+        },
+        "/private/auth/users/social": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lấy danh sách tất cả người dùng đã đăng ký qua social login",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Lấy tất cả người dùng",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/repository.SocialUserResult"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            }
+        },
+        "/private/booking/pending": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lấy danh sách các yêu cầu đặt lịch đang chờ xử lý",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Booking"
+                ],
+                "summary": "Lấy danh sách yêu cầu đặt lịch",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            }
+        },
+        "/private/booking/{id}/accept": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Chấp nhận yêu cầu đặt lịch và tạo sự kiện trên Calendar",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Booking"
+                ],
+                "summary": "Chấp nhận yêu cầu đặt lịch",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            }
+        },
+        "/private/booking/{id}/decline": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Từ chối yêu cầu đặt lịch",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Booking"
+                ],
+                "summary": "Từ chối yêu cầu đặt lịch",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            }
+        },
         "/private/calendar/connections": {
             "get": {
                 "security": [
@@ -149,6 +364,370 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            }
+        },
+        "/private/groups": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lấy danh sách các nhóm mà người dùng tham gia",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Group"
+                ],
+                "summary": "Lấy danh sách nhóm",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Số trang",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Số lượng mỗi trang",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tạo một nhóm người dùng mới",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Group"
+                ],
+                "summary": "Tạo nhóm mới",
+                "parameters": [
+                    {
+                        "description": "Thông tin nhóm",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.GroupRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entity.Group"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            }
+        },
+        "/private/groups/users": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Thêm một hoặc nhiều người dùng vào nhóm",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Group"
+                ],
+                "summary": "Thêm người dùng vào nhóm",
+                "parameters": [
+                    {
+                        "description": "Danh sách user ID",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.AddUsersToGroupRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Xóa một người dùng khỏi nhóm",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Group"
+                ],
+                "summary": "Xóa người dùng khỏi nhóm",
+                "parameters": [
+                    {
+                        "description": "Thông tin xóa",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.RemoveUserFromGroupRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            }
+        },
+        "/private/groups/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lấy thông tin chi tiết của một nhóm theo ID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Group"
+                ],
+                "summary": "Lấy thông tin nhóm",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/entity.Group"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Cập nhật thông tin của nhóm",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Group"
+                ],
+                "summary": "Cập nhật nhóm",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Thông tin cập nhật",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.GroupRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Xóa một nhóm theo ID",
+                "tags": [
+                    "Group"
+                ],
+                "summary": "Xóa nhóm",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            }
+        },
+        "/private/groups/{id}/users": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lấy danh sách người dùng trong một nhóm",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Group"
+                ],
+                "summary": "Lấy danh sách thành viên",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": true
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/errors.AppError"
                         }
@@ -318,9 +897,506 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/private/meetings": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lấy danh sách sự kiện của người dùng",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Meeting"
+                ],
+                "summary": "Lấy danh sách sự kiện",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.EventResponse"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tạo một sự kiện hẹn mới với người tham gia",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Meeting"
+                ],
+                "summary": "Tạo sự kiện hẹn",
+                "parameters": [
+                    {
+                        "description": "Thông tin sự kiện",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/go-api-starter_modules_meeting_dto.CreateEventRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.EventResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            }
+        },
+        "/private/meetings/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lấy chi tiết một sự kiện hẹn theo ID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Meeting"
+                ],
+                "summary": "Lấy thông tin sự kiện",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.EventResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Cập nhật thông tin sự kiện hẹn",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Meeting"
+                ],
+                "summary": "Cập nhật sự kiện",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Thông tin cập nhật",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateEventRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.EventResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Xóa một sự kiện hẹn",
+                "tags": [
+                    "Meeting"
+                ],
+                "summary": "Xóa sự kiện",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            }
+        },
+        "/private/meetings/{id}/find-slots": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tìm các khung giờ phù hợp cho sự kiện",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Meeting"
+                ],
+                "summary": "Tìm khung giờ rảnh",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Tham số tìm kiếm",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.FindSlotsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.FindSlotsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            }
+        },
+        "/private/meetings/{id}/select-slot": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Chọn khung giờ cho sự kiện và tạo lịch",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Meeting"
+                ],
+                "summary": "Chọn khung giờ",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Thông tin khung giờ",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.SelectSlotRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.EventResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            }
+        },
+        "/private/notifications": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Trả về danh sách thông báo của người dùng hiện tại",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Notification"
+                ],
+                "summary": "Lấy danh sách thông báo",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Số trang",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Số lượng mỗi trang",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            }
+        },
+        "/private/notifications/mark-all-read": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đánh dấu tất cả thông báo của người dùng là đã đọc",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Notification"
+                ],
+                "summary": "Đánh dấu tất cả đã đọc",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            }
+        },
+        "/private/notifications/mark-read": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Đánh dấu các thông báo cụ thể là đã đọc",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Notification"
+                ],
+                "summary": "Đánh dấu đã đọc",
+                "parameters": [
+                    {
+                        "description": "Danh sách ID thông báo",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.MarkAsReadRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            }
+        },
+        "/private/notifications/unread-count": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Trả về số lượng thông báo chưa đọc",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Notification"
+                ],
+                "summary": "Đếm thông báo chưa đọc",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "integer"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.AppError"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
+        "dto.AddUsersToGroupRequest": {
+            "type": "object",
+            "properties": {
+                "group_id": {
+                    "type": "string"
+                },
+                "user_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "dto.CalendarConnectionListResponse": {
             "type": "object",
             "properties": {
@@ -412,6 +1488,124 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.EventPreferences": {
+            "type": "object",
+            "properties": {
+                "exclude_weekends": {
+                    "type": "boolean"
+                },
+                "only_business_hours": {
+                    "type": "boolean"
+                },
+                "prefer_afternoon": {
+                    "type": "boolean"
+                },
+                "prefer_morning": {
+                    "type": "boolean"
+                },
+                "timezone": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.EventResponse": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration_minutes": {
+                    "type": "integer"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "host_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "meeting_link": {
+                    "type": "string"
+                },
+                "participants": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ParticipantResponse"
+                    }
+                },
+                "preferences": {
+                    "$ref": "#/definitions/dto.EventPreferences"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "timezone": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.FindSlotsRequest": {
+            "type": "object",
+            "properties": {
+                "search_days": {
+                    "description": "Alternative: search next N days",
+                    "type": "integer"
+                },
+                "search_end_date": {
+                    "description": "YYYY-MM-DD",
+                    "type": "string"
+                },
+                "search_start_date": {
+                    "description": "YYYY-MM-DD",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.FindSlotsResponse": {
+            "type": "object",
+            "properties": {
+                "event_id": {
+                    "type": "string"
+                },
+                "participants": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ParticipantResponse"
+                    }
+                },
+                "slots": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.SuggestedSlotDTO"
+                    }
+                }
+            }
+        },
+        "dto.GroupRequest": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.InvitationResponse": {
             "type": "object",
             "properties": {
@@ -435,6 +1629,64 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.MarkAsReadRequest": {
+            "type": "object",
+            "required": [
+                "ids"
+            ],
+            "properties": {
+                "ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "dto.ParticipantResponse": {
+            "type": "object",
+            "properties": {
+                "event_id": {
+                    "type": "string"
+                },
+                "has_calendar_connected": {
+                    "type": "boolean"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.RemoveUserFromGroupRequest": {
+            "type": "object",
+            "properties": {
+                "group_id": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.SelectSlotRequest": {
+            "type": "object",
+            "properties": {
+                "end_time": {
+                    "description": "RFC3339 format",
+                    "type": "string"
+                },
+                "slot_id": {
+                    "type": "string"
+                },
+                "start_time": {
+                    "description": "RFC3339 format",
+                    "type": "string"
+                }
+            }
+        },
         "dto.SuggestedSlot": {
             "type": "object",
             "properties": {
@@ -451,6 +1703,38 @@ const docTemplate = `{
                 },
                 "start_time": {
                     "description": "RFC3339",
+                    "type": "string"
+                },
+                "total_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.SuggestedSlotDTO": {
+            "type": "object",
+            "properties": {
+                "available_count": {
+                    "type": "integer"
+                },
+                "day_of_week": {
+                    "type": "string"
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "formatted_date": {
+                    "type": "string"
+                },
+                "formatted_time": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "score": {
+                    "type": "integer"
+                },
+                "start_time": {
                     "type": "string"
                 },
                 "total_count": {
@@ -513,6 +1797,51 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "warning": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.UpdateEventRequest": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration_minutes": {
+                    "type": "integer",
+                    "maximum": 480,
+                    "minimum": 15
+                },
+                "preferences": {
+                    "$ref": "#/definitions/dto.EventPreferences"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "entity.Group": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "description": "CreatedAt is the timestamp when the record was created\nThời gian tạo bản ghi",
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID is the unique identifier for the record\nID là định danh duy nhất cho bản ghi",
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "description": "UpdatedAt is the timestamp when the record was last updated\nThời gian cập nhật bản ghi lần cuối",
                     "type": "string"
                 }
             }
@@ -640,6 +1969,58 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "go-api-starter_modules_meeting_dto.CreateEventRequest": {
+            "type": "object",
+            "required": [
+                "duration_minutes",
+                "title"
+            ],
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration_minutes": {
+                    "type": "integer",
+                    "maximum": 480,
+                    "minimum": 15
+                },
+                "participants": {
+                    "description": "user_ids",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "preferences": {
+                    "$ref": "#/definitions/dto.EventPreferences"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "repository.SocialUserResult": {
+            "type": "object",
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "description": "social_logins.id - dùng để thêm vào group",
+                    "type": "string"
+                },
+                "user_id": {
+                    "description": "users.id - giữ lại để tương thích",
                     "type": "string"
                 }
             }
