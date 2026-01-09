@@ -164,6 +164,14 @@ $('book').onclick=async ()=>{
 
 func (b *BookingController) PublicPersonalPage(c echo.Context) error {
 	id := c.Param("id")
+	token := c.QueryParam("token")
+	accept := c.QueryParam("accept")
+	
+	// If token and accept are provided, handle accept action
+	if token != "" && accept == "true" {
+		return b.handleAcceptFromPersonalPage(c, id, token)
+	}
+	
 	html := `
 <!doctype html>
 <html>
@@ -287,6 +295,266 @@ $('book').onclick=async ()=>{
 </html>`
 	return c.HTML(http.StatusOK, html)
 }
+
+// handleAcceptFromPersonalPage handles accept action from personal booking page
+func (b *BookingController) handleAcceptFromPersonalPage(c echo.Context, idStr, token string) error {
+	ctx := c.Request().Context()
+	eventID, err := uuid.Parse(idStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, errors.NewAppError(errors.ErrInvalidInput, "invalid event id", nil))
+	}
+	
+	ev, err := b.MeetingRepo.GetEventByID(ctx, eventID)
+	if err != nil || ev == nil {
+		return c.JSON(http.StatusNotFound, errors.NewAppError(errors.ErrNotFound, "event not found", err))
+	}
+	
+	claims, err := utils.ValidateAndParseToken(token)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, errors.NewAppError(errors.ErrUnauthorized, "invalid token", err))
+	}
+	
+	if ev.HostID == nil || *ev.HostID != claims.UserID {
+		return c.JSON(http.StatusForbidden, errors.NewAppError(errors.ErrForbidden, "not authorized", nil))
+	}
+	
+	if ev.StartDate == nil || ev.EndDate == nil {
+		return c.JSON(http.StatusBadRequest, errors.NewAppError(errors.ErrInvalidInput, "missing start/end", nil))
+	}
+	
+	guestEmail := ""
+	if ev.Preferences != nil && *ev.Preferences != "" {
+		type Pref struct {
+			GuestName  string `json:"guest_name"`
+			GuestEmail string `json:"guest_email"`
+		}
+		var p Pref
+		_ = json.Unmarshal([]byte(*ev.Preferences), &p)
+		guestEmail = strings.TrimSpace(p.GuestEmail)
+	}
+	
+	req := &caldto.CreateEventRequest{
+		Title:       ev.Title,
+		Description: "Personal booking",
+		StartTime:   ev.StartDate.Format(time.RFC3339),
+		EndTime:     ev.EndDate.Format(time.RFC3339),
+		Timezone:    ev.Timezone,
+	}
+	if guestEmail != "" {
+		req.Attendees = []string{guestEmail}
+	}
+	
+	created, er := b.CalendarService.CreateEvent(ctx, claims.UserID, req)
+	if er != nil {
+		return c.JSON(http.StatusForbidden, errors.NewAppError(errors.ErrForbidden, er.Error(), er))
+	}
+	
+	ev.Status = meetentity.EventStatusScheduled
+	if created.MeetingLink != "" {
+		link := created.MeetingLink
+		ev.MeetingLink = &link
+	}
+	if err := b.MeetingRepo.UpdateEvent(ctx, ev); err != nil {
+		return c.JSON(http.StatusInternalServerError, errors.NewAppError(errors.ErrInternalServer, "failed to update event", err))
+	}
+
+	// Format event time for display
+	eventTimeStr := "Chưa xác định"
+	if ev.StartDate != nil && ev.EndDate != nil {
+		startTime := ev.StartDate.Format("15:04")
+		endTime := ev.EndDate.Format("15:04")
+		dateStr := ev.StartDate.Format("02/01/2006")
+		eventTimeStr = fmt.Sprintf("%s, %s - %s", dateStr, startTime, endTime)
+	}
+
+	// Return HTML success page
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="vi">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Lịch đã được chấp nhận | SmartMeet</title>
+	<style>
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+		}
+		
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+			background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
+			min-height: 100vh;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			padding: 20px;
+		}
+		
+		.container {
+			background: white;
+			border-radius: 20px;
+			box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+			padding: 48px;
+			max-width: 500px;
+			width: 100%%;
+			text-align: center;
+		}
+		
+		.success-icon {
+			width: 80px;
+			height: 80px;
+			border-radius: 50%%;
+			background: #10b981;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			margin: 0 auto 24px;
+			animation: scaleIn 0.5s ease-out;
+		}
+		
+		.success-icon::before {
+			content: "✓";
+			color: white;
+			font-size: 48px;
+			font-weight: bold;
+		}
+		
+		@keyframes scaleIn {
+			from {
+				transform: scale(0);
+			}
+			to {
+				transform: scale(1);
+			}
+		}
+		
+		h1 {
+			font-size: 28px;
+			color: #1e293b;
+			margin-bottom: 12px;
+			font-weight: 700;
+		}
+		
+		.message {
+			font-size: 16px;
+			color: #64748b;
+			margin-bottom: 32px;
+			line-height: 1.6;
+		}
+		
+		.event-details {
+			background: #f8fafc;
+			border-radius: 12px;
+			padding: 24px;
+			margin-bottom: 32px;
+			text-align: left;
+		}
+		
+		.event-details h2 {
+			font-size: 18px;
+			color: #1e293b;
+			margin-bottom: 16px;
+			font-weight: 600;
+		}
+		
+		.detail-row {
+			display: flex;
+			align-items: center;
+			margin-bottom: 12px;
+			font-size: 14px;
+			color: #475569;
+		}
+		
+		.detail-row:last-child {
+			margin-bottom: 0;
+		}
+		
+		.detail-label {
+			font-weight: 600;
+			color: #64748b;
+			min-width: 100px;
+		}
+		
+		.detail-value {
+			color: #1e293b;
+			flex: 1;
+		}
+		
+		.meeting-link {
+			display: inline-block;
+			background: #2563eb;
+			color: white;
+			text-decoration: none;
+			padding: 12px 24px;
+			border-radius: 8px;
+			font-weight: 600;
+			margin-top: 8px;
+			transition: background 0.2s;
+		}
+		
+		.meeting-link:hover {
+			background: #1d4ed8;
+		}
+		
+		.close-btn {
+			background: #e2e8f0;
+			color: #475569;
+			border: none;
+			padding: 12px 24px;
+			border-radius: 8px;
+			font-weight: 600;
+			cursor: pointer;
+			transition: background 0.2s;
+		}
+		
+		.close-btn:hover {
+			background: #cbd5e1;
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<div class="success-icon"></div>
+		<h1>Lịch đã được chấp nhận!</h1>
+		<p class="message">Yêu cầu đặt lịch của bạn đã được chấp nhận. Sự kiện đã được thêm vào lịch.</p>
+		
+		<div class="event-details">
+			<h2>Chi tiết sự kiện</h2>
+			<div class="detail-row">
+				<span class="detail-label">Tiêu đề:</span>
+				<span class="detail-value">%s</span>
+			</div>
+			<div class="detail-row">
+				<span class="detail-label">Thời gian:</span>
+				<span class="detail-value">%s</span>
+			</div>
+			%s
+		</div>
+		
+		<button class="close-btn" onclick="window.close()">Đóng</button>
+	</div>
+</body>
+</html>`,
+		html.EscapeString(ev.Title),
+		eventTimeStr,
+		func() string {
+			if ev.MeetingLink != nil && *ev.MeetingLink != "" {
+				return fmt.Sprintf(`
+			<div class="detail-row">
+				<span class="detail-label">Meeting Link:</span>
+				<span class="detail-value">
+					<a href="%s" target="_blank" class="meeting-link">Tham gia Google Meet</a>
+				</span>
+			</div>`, html.EscapeString(*ev.MeetingLink))
+			}
+			return ""
+		}(),
+	)
+
+	return c.HTML(http.StatusOK, html)
+}
+
 func (b *BookingController) PublicSuggestedSlots(c echo.Context) error {
 	ctx := c.Request().Context()
 	idStr := c.Param("id")
@@ -777,7 +1045,202 @@ func (b *BookingController) PublicTokenAccept(c echo.Context) error {
 	if err := b.MeetingRepo.UpdateEvent(c.Request().Context(), ev); err != nil {
 		return c.JSON(http.StatusInternalServerError, errors.NewAppError(errors.ErrInternalServer, "failed to update event", err))
 	}
-	return c.JSON(http.StatusOK, map[string]any{"message": "accepted", "event_id": ev.ID.String()})
+
+	// Format event time for display
+	eventTimeStr := "Chưa xác định"
+	if ev.StartDate != nil && ev.EndDate != nil {
+		startTime := ev.StartDate.Format("15:04")
+		endTime := ev.EndDate.Format("15:04")
+		dateStr := ev.StartDate.Format("02/01/2006")
+		eventTimeStr = fmt.Sprintf("%s, %s - %s", dateStr, startTime, endTime)
+	}
+
+	// Return HTML success page instead of JSON
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="vi">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Lịch đã được chấp nhận | SmartMeet</title>
+	<style>
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+		}
+		
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+			background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
+			min-height: 100vh;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			padding: 20px;
+		}
+		
+		.container {
+			background: white;
+			border-radius: 20px;
+			box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+			padding: 48px;
+			max-width: 500px;
+			width: 100%%;
+			text-align: center;
+		}
+		
+		.success-icon {
+			width: 80px;
+			height: 80px;
+			border-radius: 50%%;
+			background: #10b981;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			margin: 0 auto 24px;
+			animation: scaleIn 0.5s ease-out;
+		}
+		
+		.success-icon::before {
+			content: "✓";
+			color: white;
+			font-size: 48px;
+			font-weight: bold;
+		}
+		
+		@keyframes scaleIn {
+			from {
+				transform: scale(0);
+			}
+			to {
+				transform: scale(1);
+			}
+		}
+		
+		h1 {
+			font-size: 28px;
+			color: #1e293b;
+			margin-bottom: 12px;
+			font-weight: 700;
+		}
+		
+		.message {
+			font-size: 16px;
+			color: #64748b;
+			margin-bottom: 32px;
+			line-height: 1.6;
+		}
+		
+		.event-details {
+			background: #f8fafc;
+			border-radius: 12px;
+			padding: 24px;
+			margin-bottom: 32px;
+			text-align: left;
+		}
+		
+		.event-details h2 {
+			font-size: 18px;
+			color: #1e293b;
+			margin-bottom: 16px;
+			font-weight: 600;
+		}
+		
+		.detail-row {
+			display: flex;
+			align-items: center;
+			margin-bottom: 12px;
+			font-size: 14px;
+			color: #475569;
+		}
+		
+		.detail-row:last-child {
+			margin-bottom: 0;
+		}
+		
+		.detail-label {
+			font-weight: 600;
+			color: #64748b;
+			min-width: 100px;
+		}
+		
+		.detail-value {
+			color: #1e293b;
+			flex: 1;
+		}
+		
+		.meeting-link {
+			display: inline-block;
+			background: #2563eb;
+			color: white;
+			text-decoration: none;
+			padding: 12px 24px;
+			border-radius: 8px;
+			font-weight: 600;
+			margin-top: 8px;
+			transition: background 0.2s;
+		}
+		
+		.meeting-link:hover {
+			background: #1d4ed8;
+		}
+		
+		.close-btn {
+			background: #e2e8f0;
+			color: #475569;
+			border: none;
+			padding: 12px 24px;
+			border-radius: 8px;
+			font-weight: 600;
+			cursor: pointer;
+			transition: background 0.2s;
+		}
+		
+		.close-btn:hover {
+			background: #cbd5e1;
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<div class="success-icon"></div>
+		<h1>Lịch đã được chấp nhận!</h1>
+		<p class="message">Yêu cầu đặt lịch của bạn đã được chấp nhận. Sự kiện đã được thêm vào lịch.</p>
+		
+		<div class="event-details">
+			<h2>Chi tiết sự kiện</h2>
+			<div class="detail-row">
+				<span class="detail-label">Tiêu đề:</span>
+				<span class="detail-value">%s</span>
+			</div>
+			<div class="detail-row">
+				<span class="detail-label">Thời gian:</span>
+				<span class="detail-value">%s</span>
+			</div>
+			%s
+		</div>
+		
+		<button class="close-btn" onclick="window.close()">Đóng</button>
+	</div>
+</body>
+</html>`,
+		html.EscapeString(ev.Title),
+		eventTimeStr,
+		func() string {
+			if ev.MeetingLink != nil && *ev.MeetingLink != "" {
+				return fmt.Sprintf(`
+			<div class="detail-row">
+				<span class="detail-label">Meeting Link:</span>
+				<span class="detail-value">
+					<a href="%s" target="_blank" class="meeting-link">Tham gia Google Meet</a>
+				</span>
+			</div>`, html.EscapeString(*ev.MeetingLink))
+			}
+			return ""
+		}(),
+	)
+
+	return c.HTML(http.StatusOK, html)
 }
 
 func (b *BookingController) PublicTokenDecline(c echo.Context) error {
