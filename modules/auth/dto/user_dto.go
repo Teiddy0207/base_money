@@ -1,8 +1,8 @@
 package dto
 
 import (
-	"time"
 	"go-api-starter/core/dto"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -109,3 +109,10 @@ type UserDetailDTO struct {
 }
 
 type PaginatedUserDTO = dto.Pagination[UserResponse]
+
+type GoogleVerifyRequest struct {
+	IdToken        string `json:"idToken"`
+	AccessToken    string `json:"accessToken,omitempty"`    // Optional: để gọi Google APIs như Calendar
+	RefreshToken   string `json:"refreshToken,omitempty"`   // Optional: để refresh access token khi hết hạn
+	ServerAuthCode string `json:"serverAuthCode,omitempty"` // Optional: backend exchanges for refresh_token
+}

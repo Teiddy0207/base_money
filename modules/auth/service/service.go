@@ -8,6 +8,7 @@ import (
 	"go-api-starter/modules/auth/dto"
 	"go-api-starter/modules/auth/entity"
 	"go-api-starter/modules/auth/repository"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -17,8 +18,17 @@ type AuthService struct {
 	cache cache.Cache
 }
 
+type GoogleToken struct {
+	AccessToken  string
+	RefreshToken string
+	ExpiresAt    time.Time
+}
+
 func NewAuthService(repo repository.AuthRepositoryInterface, cache cache.Cache) AuthServiceInterface {
-	return &AuthService{repo: repo, cache: cache}
+	return &AuthService{
+		repo:  repo,
+		cache: cache,
+	}
 }
 
 type AuthServiceInterface interface {
@@ -57,4 +67,22 @@ type AuthServiceInterface interface {
 	PrivateGetUser(ctx context.Context, userID uuid.UUID) (*dto.UserDetailDTO, *errors.AppError)
 	PrivateGetPermissionsByUserID(ctx context.Context, userID uuid.UUID) (*[]dto.PermissionResponse, error)
 	PrivateGetPermissionsByUserIDFromCache(ctx context.Context, userID uuid.UUID) (*[]dto.PermissionResponse, error)
+
+	// Google OAuth methods
+	GetGoogleAuthURL(ctx context.Context) (string, *errors.AppError)
+	HandleGoogleCallback(ctx context.Context, code string, state string) (*dto.LoginResponse, *errors.AppError)
+	VerifyGoogleIdToken(ctx context.Context, idToken string, googleAccessToken string, googleRefreshToken string, serverAuthCode string) (*dto.LoginResponse, *errors.AppError)
+
+	// Google Calendar methods
+	GetGoogleCalendarEvents(ctx context.Context, userID uuid.UUID, params params.QueryParams, timeMin string, timeMax string) (*dto.PaginatedGoogleCalendarEventDTO, *errors.AppError)
+	GetGoogleCalendarList(ctx context.Context, userID uuid.UUID, params params.QueryParams) (*dto.PaginatedGoogleCalendarDTO, *errors.AppError)
+	GetGoogleAccessToken(ctx context.Context, userID uuid.UUID) (string, *errors.AppError)
+	GetUserIDBySocialLoginID(ctx context.Context, socialLoginID uuid.UUID) (uuid.UUID, *errors.AppError)
+	GetSocialLoginByUserAndProviderName(ctx context.Context, userID uuid.UUID, providerName string) (*entity.SocialLogin, *errors.AppError)
+	GetSocialLoginByID(ctx context.Context, id uuid.UUID) (*entity.SocialLogin, *errors.AppError)
+	GetSocialLoginBySlug(ctx context.Context, slug string) (*entity.SocialLogin, *errors.AppError)
+
+	// Social Users search methods
+	SearchSocialUsers(ctx context.Context, query string) ([]repository.SocialUserResult, error)
+	GetAllSocialUsers(ctx context.Context) ([]repository.SocialUserResult, error)
 }

@@ -55,6 +55,19 @@ func (r *ProductRouter) Setup(e *echo.Echo, middleware *middleware.Middleware) {
 	products.PUT("/categories/:id", r.ProductController.PrivateUpdateCategory, middleware.AuthMiddleware(), middleware.PermissionMiddleware())
 	products.DELETE("/categories/:id", r.ProductController.PrivateDeleteCategory, middleware.AuthMiddleware(), middleware.PermissionMiddleware())
 
+	// Groups routes - Quản lý nhóm sản phẩm
+	products.POST("/groups", r.ProductController.PrivateCreateGroup, middleware.AuthMiddleware(), middleware.PermissionMiddleware())
+	products.GET("/groups", r.ProductController.PrivateGetGroups, middleware.AuthMiddleware(), middleware.PermissionMiddleware())
+	products.GET("/groups/:id", r.ProductController.PrivateGetGroupById, middleware.AuthMiddleware(), middleware.PermissionMiddleware())
+	products.PUT("/groups/:id", r.ProductController.PrivateUpdateGroup, middleware.AuthMiddleware(), middleware.PermissionMiddleware())
+	products.DELETE("/groups/:id", r.ProductController.PrivateDeleteGroup, middleware.AuthMiddleware(), middleware.PermissionMiddleware())
+
+	// UserGroup routes - Quản lý user trong group
+	products.POST("/groups/users", r.ProductController.PrivateAddUsersToGroup, middleware.AuthMiddleware(), middleware.PermissionMiddleware())
+	products.DELETE("/groups/users", r.ProductController.PrivateRemoveUserFromGroup, middleware.AuthMiddleware(), middleware.PermissionMiddleware())
+	products.GET("/groups/:id/users", r.ProductController.PrivateGetUsersByGroupId, middleware.AuthMiddleware(), middleware.PermissionMiddleware())
+	products.GET("/users/:id/groups", r.ProductController.PrivateGetGroupsByUserId, middleware.AuthMiddleware(), middleware.PermissionMiddleware())
+
 	// Ingredients routes - Quản lý thành phần
 	products.POST("/ingredients", r.ProductController.PrivateCreateIngredient, middleware.AuthMiddleware(), middleware.PermissionMiddleware())
 	products.GET("/ingredients", r.ProductController.PrivateGetIngredients, middleware.AuthMiddleware(), middleware.PermissionMiddleware())

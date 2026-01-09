@@ -81,10 +81,54 @@ func InitDB(config DatabaseConfig) (Database, error) {
 	}
 
 	logger.Info("Database initialized successfully",
+		"host", config.Host,
+		"port", config.Port,
+		"database", config.DBName,
+		"user", config.User,
 		"maxOpenConns", constants.DatabaseMaxOpenConns,
 		"maxIdleConns", constants.DatabaseMaxIdleConns,
 		"connMaxLifetime", constants.DatabaseConnMaxLifetime,
 	)
+
+	// Check if users table exists
+	var tableExists bool
+	checkTableQuery := `
+		SELECT EXISTS (
+			SELECT FROM information_schema.tables 
+			WHERE table_schema = 'public' 
+			AND table_name = 'users'
+		)
+	`
+	err = sqlDB.QueryRow(checkTableQuery).Scan(&tableExists)
+	if err != nil {
+		logger.Error("Failed to check users table", "error", err)
+	} else {
+		if tableExists {
+			logger.Info("Users table exists")
+			// Check columns in users table
+			var columns []string
+			checkColumnsQuery := `
+				SELECT column_name 
+				FROM information_schema.columns 
+				WHERE table_schema = 'public' 
+				AND table_name = 'users'
+				ORDER BY ordinal_position
+			`
+			rows, err := sqlDB.Query(checkColumnsQuery)
+			if err == nil {
+				defer rows.Close()
+				for rows.Next() {
+					var colName string
+					if err := rows.Scan(&colName); err == nil {
+						columns = append(columns, colName)
+					}
+				}
+				logger.Info("Users table columns", "columns", columns)
+			}
+		} else {
+			logger.Warn("Users table does not exist")
+		}
+	}
 
 	return db, nil
 }

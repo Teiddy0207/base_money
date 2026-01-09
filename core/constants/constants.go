@@ -8,6 +8,9 @@ const (
 
 	// OTP related keys
 	RedisKeyOTPChangePassword = RedisKeyPrefix + "otp_change_password:"
+	
+	// OAuth related keys
+	RedisKeyOAuthState = RedisKeyPrefix + "oauth_state:"
 )
 
 const (

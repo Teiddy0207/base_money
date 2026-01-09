@@ -9,11 +9,18 @@ import (
 	"go-api-starter/core/database"
 	"go-api-starter/core/logger"
 	"go-api-starter/core/middleware"
-	storageClient "go-api-starter/core/storage"
+
+	// storageClient "go-api-starter/core/storage"
 	"go-api-starter/core/utils"
 	"go-api-starter/modules/auth"
+	"go-api-starter/modules/booking"
+	"go-api-starter/modules/calendar"
+	"go-api-starter/modules/invitation"
+	"go-api-starter/modules/meeting"
+	"go-api-starter/modules/notification"
 	"go-api-starter/modules/product"
-	"go-api-starter/modules/storage"
+
+	// "go-api-starter/modules/storage"
 	"go-api-starter/workers"
 	"os"
 	"os/signal"
@@ -21,6 +28,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	echo_middleware "github.com/labstack/echo/v4/middleware"
 )
 
 type Server struct {
@@ -108,35 +116,49 @@ func initServer() (*Server, error) {
 	utils.InitEmailConfig(emailConfig)
 
 	// Initialize R2 client
-	r2Client, err := storageClient.NewS3Client(cfg)
-	if err != nil {
-		logger.Error("Failed to initialize R2 client", "error", err)
-		return nil, fmt.Errorf("failed to initialize R2 client: %w", err)
-	}
+	// r2Client, err := storageClient.NewS3Client(cfg)
+	// if err != nil {
+	// 	logger.Error("Failed to initialize R2 client", "error", err)
+	// 	return nil, fmt.Errorf("failed to initialize R2 client: %w", err)
+	// }
 
-	logger.Info("Server initializing",
-		"environment", environment,
-		"host", cfg.Server.Host,
-		"port", cfg.Server.Port,
-		"database_host", cfg.Database.Host,
-		"database_port", cfg.Database.Port,
-		"database_name", cfg.Database.DBName,
-		"redis_address", cfg.Redis.Address,
-		"redis_db", cfg.Redis.DB,
-		"smtp_host", cfg.SMTP.Host,
-		"smtp_port", cfg.SMTP.Port,
-	)
+	// logger.Info("Server initializing",
+	// 	"environment", environment,
+	// 	"host", cfg.Server.Host,
+	// 	"port", cfg.Server.Port,
+	// 	"database_host", cfg.Database.Host,
+	// 	"database_port", cfg.Database.Port,
+	// 	"database_name", cfg.Database.DBName,
+	// 	"redis_address", cfg.Redis.Address,
+	// 	"redis_db", cfg.Redis.DB,
+	// 	"smtp_host", cfg.SMTP.Host,
+	// 	"smtp_port", cfg.SMTP.Port,
+	// )
 
 	e := echo.New()
 
 	// Middleware
+	e.Use(echo_middleware.Recover())
 	e.Use(middleware.LoggerMiddleware())
 	e.Use(middleware.CORSMiddleware())
 
 	// Initialize modules
 	product.Init(e, db, *redisCache)
-	storage.Init(e, db, r2Client, *redisCache)
+	// storage.Init(e, db, r2Client, *redisCache)
 	auth.Init(e, db, *redisCache)
+
+	// Initialize common middleware for Notification
+	mw := middleware.NewMiddleware(nil)
+
+	// Initialize Notification module
+	notifService := notification.Init(e.Group("/api/v1/private"), db, mw)
+
+	// Initialize Invitation module
+	invitationService := invitation.Init(e.Group("/api/v1/private"), db, mw, notifService)
+
+	calendar.Init(e, db, *redisCache, notifService, invitationService)
+	booking.Init(e, db, *redisCache, notifService, invitationService)
+	meeting.Init(e, db, mw)
 
 	// Initialize Asynq worker server
 	workers.NewServer()

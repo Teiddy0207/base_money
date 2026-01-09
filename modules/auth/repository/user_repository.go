@@ -67,9 +67,9 @@ func (r *AuthRepository) PrivateGetUsers(ctx context.Context, params params.Quer
 			u.email_verified_at,
 			u.phone_verified_at,
 			u.locked_until,
-			u.is_active,
-			u.created_at, 
-			u.updated_at
+			COALESCE(u.is_active, true) as is_active,
+			COALESCE(u.created_at, NOW()) as created_at, 
+			COALESCE(u.updated_at, NOW()) as updated_at
 	` + baseQuery + whereClause + `
 		ORDER BY u.created_at DESC
 		OFFSET $` + fmt.Sprintf("%d", argIndex+1) + ` ROWS FETCH NEXT $` + fmt.Sprintf("%d", argIndex) + ` ROWS ONLY`
@@ -242,7 +242,13 @@ func (r *AuthRepository) UpdateUser(ctx context.Context, user *entity.User) erro
 
 func (r *AuthRepository) GetUserByIdentifier(ctx context.Context, identifier string) (*entity.User, error) {
 	var user entity.User
-	query := `SELECT * FROM users WHERE phone = $1 OR email = $1 OR id::text = $1 OR username = $1`
+	query := `SELECT 
+		id, email, phone, username, password, email_verified_at, phone_verified_at, 
+		locked_until, COALESCE(is_active, true) as is_active, 
+		COALESCE(created_at, NOW()) as created_at, 
+		COALESCE(updated_at, NOW()) as updated_at 
+		FROM users 
+		WHERE phone = $1 OR email = $1 OR id::text = $1 OR username = $1`
 	err := r.DB.GetContext(ctx, &user, query, identifier)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -257,9 +263,13 @@ func (r *AuthRepository) GetUserByIdentifier(ctx context.Context, identifier str
 
 func (r *AuthRepository) CreateUser(ctx context.Context, user *entity.User) (*entity.User, error) {
 	query := `
-		INSERT INTO users (email, phone, username, password)
-		VALUES (:email, :phone, :username, :password)
-		RETURNING *
+		INSERT INTO users (email, phone, username, password, email_verified_at, phone_verified_at, is_active)
+		VALUES (:email, :phone, :username, :password, :email_verified_at, :phone_verified_at, :is_active)
+		RETURNING 
+			id, email, phone, username, password, email_verified_at, phone_verified_at, 
+			locked_until, COALESCE(is_active, true) as is_active,
+			COALESCE(created_at, NOW()) as created_at, 
+			COALESCE(updated_at, NOW()) as updated_at
 	`
 	rows, err := r.DB.NamedQueryContext(ctx, query, user)
 	if err != nil {
