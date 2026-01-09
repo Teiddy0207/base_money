@@ -342,3 +342,14 @@ func (service *AuthService) GetSocialLoginByID(ctx context.Context, id uuid.UUID
 	}
 	return sl, nil
 }
+
+func (service *AuthService) GetSocialLoginBySlug(ctx context.Context, slug string) (*entity.SocialLogin, *errors.AppError) {
+	sl, err := service.repo.GetSocialLoginByUsername(ctx, slug)
+	if err != nil {
+		return nil, errors.NewAppError(errors.ErrGetFailed, "failed to get social login", err)
+	}
+	if sl == nil {
+		return nil, errors.NewAppError(errors.ErrNotFound, "social login not found", nil)
+	}
+	return sl, nil
+}

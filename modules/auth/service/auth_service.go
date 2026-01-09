@@ -526,7 +526,8 @@ func (service *AuthService) GetGoogleAuthURL(ctx context.Context) (string, *erro
 		Scopes: []string{
 			"https://www.googleapis.com/auth/userinfo.email",
 			"https://www.googleapis.com/auth/userinfo.profile",
-			"https://www.googleapis.com/auth/calendar.readonly", // Google Calendar read access
+			"https://www.googleapis.com/auth/calendar.readonly",
+			"https://www.googleapis.com/auth/calendar.events",
 		},
 		Endpoint: google.Endpoint,
 	}
@@ -585,7 +586,8 @@ func (service *AuthService) HandleGoogleCallback(ctx context.Context, code strin
 		Scopes: []string{
 			"https://www.googleapis.com/auth/userinfo.email",
 			"https://www.googleapis.com/auth/userinfo.profile",
-			"https://www.googleapis.com/auth/calendar.readonly", // Google Calendar read access
+			"https://www.googleapis.com/auth/calendar.readonly",
+			"https://www.googleapis.com/auth/calendar.events",
 		},
 		Endpoint: google.Endpoint,
 	}

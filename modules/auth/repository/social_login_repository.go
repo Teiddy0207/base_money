@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"go-api-starter/core/logger"
 	"go-api-starter/modules/auth/entity"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -119,6 +120,20 @@ func (r *AuthRepository) GetSocialLoginByID(ctx context.Context, id uuid.UUID) (
 			return nil, nil
 		}
 		logger.Error("AuthRepository:GetSocialLoginByID:Error", "error", err, "id", id)
+		return nil, err
+	}
+	return &sl, nil
+}
+
+func (r *AuthRepository) GetSocialLoginByUsername(ctx context.Context, username string) (*entity.SocialLogin, error) {
+	var sl entity.SocialLogin
+	query := `SELECT * FROM social_logins WHERE LOWER(provider_username) = LOWER($1) AND is_active = true`
+	err := r.DB.GetContext(ctx, &sl, query, strings.TrimSpace(username))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		logger.Error("AuthRepository:GetSocialLoginByUsername:Error", "error", err, "username", username)
 		return nil, err
 	}
 	return &sl, nil
