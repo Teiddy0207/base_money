@@ -4,33 +4,21 @@ import (
 	"net/http"
 	"time"
 
-	"go-api-starter/core/controller"
 	"go-api-starter/core/errors"
-	"go-api-starter/core/logger"
 	"go-api-starter/core/utils"
-	authservice "go-api-starter/modules/auth/service"
 	"go-api-starter/modules/calendar/dto"
 	"go-api-starter/modules/calendar/service"
-	productservice "go-api-starter/modules/product/service"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
 type CalendarController struct {
-	controller.BaseController
-	service        service.CalendarService
-	productService productservice.ProductServiceInterface
-	authService    authservice.AuthServiceInterface
+	service service.CalendarService
 }
 
-func NewCalendarController(service service.CalendarService, productSvc productservice.ProductServiceInterface, authSvc authservice.AuthServiceInterface) *CalendarController {
-	return &CalendarController{
-		BaseController: controller.NewBaseController(),
-		service:        service,
-		productService: productSvc,
-		authService:    authSvc,
-	}
+func NewCalendarController(service service.CalendarService) *CalendarController {
+	return &CalendarController{service: service}
 }
 
 // GetConnections returns all calendar connections for the current user
@@ -158,73 +146,56 @@ func (c *CalendarController) CreateEvent(ctx echo.Context) error {
 	return ctx.JSON(http.StatusCreated, result)
 }
 
-// GET /api/v1/private/users/:id/calendar/busy
-func (c *CalendarController) GetUserBusy(ctx echo.Context) error {
-	requesterID, err := getUserIDFromContext(ctx)
+// DeleteEvent deletes or declines a calendar event
+// DELETE /api/v1/private/calendar/events/:id
+func (c *CalendarController) DeleteEvent(ctx echo.Context) error {
+	userID, err := getUserIDFromContext(ctx)
 	if err != nil {
-		return c.Unauthorized(errors.ErrUnauthorized, "Invalid user", nil)
+		return ctx.JSON(http.StatusUnauthorized, errors.NewAppError(errors.ErrUnauthorized, "Invalid user", nil))
 	}
-	targetSLIDStr := ctx.Param("id")
-	targetSLID, err := uuid.Parse(targetSLIDStr)
-	if err != nil {
-		return c.BadRequest(errors.ErrInvalidInput, "Invalid social login id", nil)
-	}
-	startTimeStr := ctx.QueryParam("start_time")
-	endTimeStr := ctx.QueryParam("end_time")
-	logger.Info("CalendarController:GetUserBusy:Request", "requester_user_id", requesterID, "target_social_login_id", targetSLIDStr, "start_time", startTimeStr, "end_time", endTimeStr)
-	if startTimeStr == "" || endTimeStr == "" {
-		return c.BadRequest(errors.ErrInvalidInput, "start_time and end_time are required", nil)
-	}
-	startTime, err := time.Parse(time.RFC3339, startTimeStr)
-	if err != nil {
-		return c.BadRequest(errors.ErrInvalidInput, "Invalid start_time format", nil)
-	}
-	endTime, err := time.Parse(time.RFC3339, endTimeStr)
-	if err != nil {
-		return c.BadRequest(errors.ErrInvalidInput, "Invalid end_time format", nil)
-	}
-	// Map requester user -> requester social_login id (google)
-	requesterSL, appErr := c.authService.GetSocialLoginByUserAndProviderName(ctx.Request().Context(), requesterID, "google")
-	if appErr != nil {
-		return c.Forbidden(errors.ErrForbidden, "forbidden", nil)
-	}
-	logger.Info("CalendarController:GetUserBusy:RequesterSocialLogin", "social_login_id", requesterSL.ID)
 
-	if requesterSL.ID != targetSLID {
-		ok, appErr := c.productService.PrivateAreUsersInSameGroup(ctx.Request().Context(), requesterSL.ID, targetSLID)
-		if appErr != nil {
-			return c.ErrorResponse(ctx, appErr)
-		}
-		logger.Info("CalendarController:GetUserBusy:GroupCheck", "same_group", ok)
-		if !ok {
-			return c.Forbidden(errors.ErrForbidden, "forbidden", nil)
-		}
+	eventID := ctx.Param("id")
+	if eventID == "" {
+		return ctx.JSON(http.StatusBadRequest, errors.NewAppError(errors.ErrInvalidInput, "Event ID is required", nil))
 	}
-	// Convert target social_login id -> target user id for token retrieval
-	targetUserID, appErr := c.authService.GetUserIDBySocialLoginID(ctx.Request().Context(), targetSLID)
-	if appErr != nil {
-		return c.NotFound(errors.ErrNotFound, appErr.Message, appErr)
+
+	if err := c.service.DeleteEvent(ctx.Request().Context(), userID, eventID); err != nil {
+		return ctx.JSON(http.StatusInternalServerError, errors.NewAppError(errors.ErrInternalServer, err.Error(), err))
 	}
-	logger.Info("CalendarController:GetUserBusy:TargetUserMapped", "target_user_id", targetUserID)
-	// Get relational info for target social login
-	targetSL, appErr := c.authService.GetSocialLoginByID(ctx.Request().Context(), targetSLID)
-	if appErr != nil {
-		return c.NotFound(errors.ErrNotFound, appErr.Message, appErr)
-	}
-	busySlots, err := c.service.GetFreeBusy(ctx.Request().Context(), targetUserID, startTime, endTime)
+
+	return ctx.JSON(http.StatusOK, map[string]string{"message": "Event deleted successfully"})
+}
+
+// GetSuggestedSlots finds available meeting time slots
+// POST /api/v1/private/calendar/suggested-slots
+func (c *CalendarController) GetSuggestedSlots(ctx echo.Context) error {
+	// Get current user (event creator)
+	currentUserID, err := getUserIDFromContext(ctx)
 	if err != nil {
-		return c.InternalServerError(errors.ErrInternalServer, err.Error(), err)
+		return ctx.JSON(http.StatusUnauthorized, errors.NewAppError(errors.ErrUnauthorized, "Invalid user", nil))
 	}
-	logger.Info("CalendarController:GetUserBusy:Result", "busy_count", len(busySlots))
-	return c.SuccessResponse(ctx, dto.UserBusyResponse{
-		UserID: targetSLID.String(),
-		User: dto.BusyUserInfo{
-			ID:               targetUserID.String(),
-			ProviderUsername: targetSL.ProviderUsername,
-			ProviderEmail:    targetSL.ProviderEmail,
-		},
-		Busy: busySlots,
-	}, "get user busy success")
+
+	var req dto.SuggestedSlotsRequest
+	if err := ctx.Bind(&req); err != nil {
+		return ctx.JSON(http.StatusBadRequest, errors.NewAppError(errors.ErrInvalidInput, "Invalid request body", nil))
+	}
+
+	// Always include current user (event creator) in the search
+	// Prepend current user ID to ensure creator's calendar is checked
+	allUserIDs := []string{currentUserID.String()}
+	for _, uid := range req.UserIDs {
+		if uid != currentUserID.String() { // Avoid duplicates
+			allUserIDs = append(allUserIDs, uid)
+		}
+	}
+	req.UserIDs = allUserIDs
+
+	result, err := c.service.FindAvailableSlots(ctx.Request().Context(), &req)
+	if err != nil {
+		return ctx.JSON(http.StatusInternalServerError, errors.NewAppError(errors.ErrInternalServer, err.Error(), err))
+	}
+
+	return ctx.JSON(http.StatusOK, result)
 }
 
 // Helper function to get user ID from JWT context

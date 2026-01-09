@@ -9,11 +9,17 @@ import (
 	"go-api-starter/core/database"
 	"go-api-starter/core/logger"
 	"go-api-starter/core/middleware"
+
 	// storageClient "go-api-starter/core/storage"
 	"go-api-starter/core/utils"
 	"go-api-starter/modules/auth"
+	"go-api-starter/modules/booking"
 	"go-api-starter/modules/calendar"
+	"go-api-starter/modules/invitation"
+	"go-api-starter/modules/meeting"
+	"go-api-starter/modules/notification"
 	"go-api-starter/modules/product"
+
 	// "go-api-starter/modules/storage"
 	"go-api-starter/workers"
 	"os"
@@ -22,6 +28,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	echo_middleware "github.com/labstack/echo/v4/middleware"
 )
 
 type Server struct {
@@ -131,6 +138,7 @@ func initServer() (*Server, error) {
 	e := echo.New()
 
 	// Middleware
+	e.Use(echo_middleware.Recover())
 	e.Use(middleware.LoggerMiddleware())
 	e.Use(middleware.CORSMiddleware())
 
@@ -138,7 +146,19 @@ func initServer() (*Server, error) {
 	product.Init(e, db, *redisCache)
 	// storage.Init(e, db, r2Client, *redisCache)
 	auth.Init(e, db, *redisCache)
-	calendar.Init(e, db, *redisCache)
+
+	// Initialize common middleware for Notification
+	mw := middleware.NewMiddleware(nil)
+
+	// Initialize Notification module
+	notifService := notification.Init(e.Group("/api/v1/private"), db, mw)
+
+	// Initialize Invitation module
+	invitationService := invitation.Init(e.Group("/api/v1/private"), db, mw, notifService)
+
+	calendar.Init(e, db, *redisCache, notifService, invitationService)
+	booking.Init(e, db, *redisCache, notifService, invitationService)
+	meeting.Init(e, db, mw)
 
 	// Initialize Asynq worker server
 	workers.NewServer()

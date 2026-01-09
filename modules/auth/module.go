@@ -43,3 +43,9 @@ func seedGoogleProvider(repo repository.AuthRepositoryInterface) {
 		logger.Error("Auth:SeedGoogleProvider:Error", "error", err)
 	}
 }
+
+// GetService creates and returns an AuthService instance for use by other modules
+func GetService(db database.Database, cache cache.Cache) service.AuthServiceInterface {
+	repo := repository.NewAuthRepository(db)
+	return service.NewAuthService(repo, cache)
+}

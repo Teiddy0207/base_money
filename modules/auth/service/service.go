@@ -71,7 +71,7 @@ type AuthServiceInterface interface {
 	// Google OAuth methods
 	GetGoogleAuthURL(ctx context.Context) (string, *errors.AppError)
 	HandleGoogleCallback(ctx context.Context, code string, state string) (*dto.LoginResponse, *errors.AppError)
-	VerifyGoogleIdToken(ctx context.Context, idToken string, googleAccessToken string, googleRefreshToken string) (*dto.LoginResponse, *errors.AppError)
+	VerifyGoogleIdToken(ctx context.Context, idToken string, googleAccessToken string, googleRefreshToken string, serverAuthCode string) (*dto.LoginResponse, *errors.AppError)
 
 	// Google Calendar methods
 	GetGoogleCalendarEvents(ctx context.Context, userID uuid.UUID, params params.QueryParams, timeMin string, timeMax string) (*dto.PaginatedGoogleCalendarEventDTO, *errors.AppError)
@@ -80,6 +80,7 @@ type AuthServiceInterface interface {
 	GetUserIDBySocialLoginID(ctx context.Context, socialLoginID uuid.UUID) (uuid.UUID, *errors.AppError)
 	GetSocialLoginByUserAndProviderName(ctx context.Context, userID uuid.UUID, providerName string) (*entity.SocialLogin, *errors.AppError)
 	GetSocialLoginByID(ctx context.Context, id uuid.UUID) (*entity.SocialLogin, *errors.AppError)
+	GetSocialLoginBySlug(ctx context.Context, slug string) (*entity.SocialLogin, *errors.AppError)
 
 	// Social Users search methods
 	SearchSocialUsers(ctx context.Context, query string) ([]repository.SocialUserResult, error)
