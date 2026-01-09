@@ -1,5 +1,14 @@
 basePath: /api/v1
 definitions:
+  dto.AddUsersToGroupRequest:
+    properties:
+      group_id:
+        type: string
+      user_ids:
+        items:
+          type: string
+        type: array
+    type: object
   dto.CalendarConnectionListResponse:
     properties:
       connections:
@@ -59,6 +68,84 @@ definitions:
       title:
         type: string
     type: object
+  dto.EventPreferences:
+    properties:
+      exclude_weekends:
+        type: boolean
+      only_business_hours:
+        type: boolean
+      prefer_afternoon:
+        type: boolean
+      prefer_morning:
+        type: boolean
+      timezone:
+        type: string
+    type: object
+  dto.EventResponse:
+    properties:
+      address:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      duration_minutes:
+        type: integer
+      end_date:
+        type: string
+      host_id:
+        type: string
+      id:
+        type: string
+      meeting_link:
+        type: string
+      participants:
+        items:
+          $ref: '#/definitions/dto.ParticipantResponse'
+        type: array
+      preferences:
+        $ref: '#/definitions/dto.EventPreferences'
+      start_date:
+        type: string
+      status:
+        type: string
+      timezone:
+        type: string
+      title:
+        type: string
+    type: object
+  dto.FindSlotsRequest:
+    properties:
+      search_days:
+        description: 'Alternative: search next N days'
+        type: integer
+      search_end_date:
+        description: YYYY-MM-DD
+        type: string
+      search_start_date:
+        description: YYYY-MM-DD
+        type: string
+    type: object
+  dto.FindSlotsResponse:
+    properties:
+      event_id:
+        type: string
+      participants:
+        items:
+          $ref: '#/definitions/dto.ParticipantResponse'
+        type: array
+      slots:
+        items:
+          $ref: '#/definitions/dto.SuggestedSlotDTO'
+        type: array
+    type: object
+  dto.GroupRequest:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+    type: object
   dto.InvitationResponse:
     properties:
       created_at:
@@ -74,6 +161,44 @@ definitions:
       status:
         type: string
     type: object
+  dto.MarkAsReadRequest:
+    properties:
+      ids:
+        items:
+          type: string
+        type: array
+    required:
+    - ids
+    type: object
+  dto.ParticipantResponse:
+    properties:
+      event_id:
+        type: string
+      has_calendar_connected:
+        type: boolean
+      status:
+        type: string
+      user_id:
+        type: string
+    type: object
+  dto.RemoveUserFromGroupRequest:
+    properties:
+      group_id:
+        type: string
+      user_id:
+        type: string
+    type: object
+  dto.SelectSlotRequest:
+    properties:
+      end_time:
+        description: RFC3339 format
+        type: string
+      slot_id:
+        type: string
+      start_time:
+        description: RFC3339 format
+        type: string
+    type: object
   dto.SuggestedSlot:
     properties:
       available_count:
@@ -86,6 +211,27 @@ definitions:
         type: integer
       start_time:
         description: RFC3339
+        type: string
+      total_count:
+        type: integer
+    type: object
+  dto.SuggestedSlotDTO:
+    properties:
+      available_count:
+        type: integer
+      day_of_week:
+        type: string
+      end_time:
+        type: string
+      formatted_date:
+        type: string
+      formatted_time:
+        type: string
+      id:
+        type: string
+      score:
+        type: integer
+      start_time:
         type: string
       total_count:
         type: integer
@@ -128,6 +274,43 @@ definitions:
       total_participants:
         type: integer
       warning:
+        type: string
+    type: object
+  dto.UpdateEventRequest:
+    properties:
+      address:
+        type: string
+      description:
+        type: string
+      duration_minutes:
+        maximum: 480
+        minimum: 15
+        type: integer
+      preferences:
+        $ref: '#/definitions/dto.EventPreferences'
+      title:
+        type: string
+    type: object
+  entity.Group:
+    properties:
+      createdAt:
+        description: |-
+          CreatedAt is the timestamp when the record was created
+          Thời gian tạo bản ghi
+        type: string
+      description:
+        type: string
+      id:
+        description: |-
+          ID is the unique identifier for the record
+          ID là định danh duy nhất cho bản ghi
+        type: string
+      name:
+        type: string
+      updatedAt:
+        description: |-
+          UpdatedAt is the timestamp when the record was last updated
+          Thời gian cập nhật bản ghi lần cuối
         type: string
     type: object
   errors.AppError:
@@ -239,6 +422,42 @@ definitions:
     - start_time
     - title
     type: object
+  go-api-starter_modules_meeting_dto.CreateEventRequest:
+    properties:
+      address:
+        type: string
+      description:
+        type: string
+      duration_minutes:
+        maximum: 480
+        minimum: 15
+        type: integer
+      participants:
+        description: user_ids
+        items:
+          type: string
+        type: array
+      preferences:
+        $ref: '#/definitions/dto.EventPreferences'
+      title:
+        type: string
+    required:
+    - duration_minutes
+    - title
+    type: object
+  repository.SocialUserResult:
+    properties:
+      display_name:
+        type: string
+      email:
+        type: string
+      id:
+        description: social_logins.id - dùng để thêm vào group
+        type: string
+      user_id:
+        description: users.id - giữ lại để tương thích
+        type: string
+    type: object
 host: localhost:7070
 info:
   contact:
@@ -252,6 +471,142 @@ info:
   title: SmartSchedule API
   version: "1.0"
 paths:
+  /private/auth/users/search:
+    get:
+      description: Tìm kiếm người dùng theo từ khóa (tên, email)
+      parameters:
+      - description: Từ khóa tìm kiếm
+        in: query
+        name: q
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/repository.SocialUserResult'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Tìm kiếm người dùng
+      tags:
+      - Users
+  /private/auth/users/social:
+    get:
+      description: Lấy danh sách tất cả người dùng đã đăng ký qua social login
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/repository.SocialUserResult'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Lấy tất cả người dùng
+      tags:
+      - Users
+  /private/booking/{id}/accept:
+    post:
+      description: Chấp nhận yêu cầu đặt lịch và tạo sự kiện trên Calendar
+      parameters:
+      - description: Event ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Chấp nhận yêu cầu đặt lịch
+      tags:
+      - Booking
+  /private/booking/{id}/decline:
+    post:
+      description: Từ chối yêu cầu đặt lịch
+      parameters:
+      - description: Event ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Từ chối yêu cầu đặt lịch
+      tags:
+      - Booking
+  /private/booking/pending:
+    get:
+      description: Lấy danh sách các yêu cầu đặt lịch đang chờ xử lý
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Lấy danh sách yêu cầu đặt lịch
+      tags:
+      - Booking
   /private/calendar/connections:
     get:
       description: Trả về tất cả các lịch đã kết nối của người dùng hiện tại
@@ -335,6 +690,236 @@ paths:
       summary: Tìm khung giờ rảnh
       tags:
       - Calendar
+  /private/groups:
+    get:
+      description: Lấy danh sách các nhóm mà người dùng tham gia
+      parameters:
+      - description: Số trang
+        in: query
+        name: page
+        type: integer
+      - description: Số lượng mỗi trang
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Lấy danh sách nhóm
+      tags:
+      - Group
+    post:
+      consumes:
+      - application/json
+      description: Tạo một nhóm người dùng mới
+      parameters:
+      - description: Thông tin nhóm
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.GroupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.Group'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Tạo nhóm mới
+      tags:
+      - Group
+  /private/groups/{id}:
+    delete:
+      description: Xóa một nhóm theo ID
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Xóa nhóm
+      tags:
+      - Group
+    get:
+      description: Lấy thông tin chi tiết của một nhóm theo ID
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.Group'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Lấy thông tin nhóm
+      tags:
+      - Group
+    put:
+      consumes:
+      - application/json
+      description: Cập nhật thông tin của nhóm
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Thông tin cập nhật
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.GroupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Cập nhật nhóm
+      tags:
+      - Group
+  /private/groups/{id}/users:
+    get:
+      description: Lấy danh sách người dùng trong một nhóm
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Lấy danh sách thành viên
+      tags:
+      - Group
+  /private/groups/users:
+    delete:
+      consumes:
+      - application/json
+      description: Xóa một người dùng khỏi nhóm
+      parameters:
+      - description: Thông tin xóa
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RemoveUserFromGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Xóa người dùng khỏi nhóm
+      tags:
+      - Group
+    post:
+      consumes:
+      - application/json
+      description: Thêm một hoặc nhiều người dùng vào nhóm
+      parameters:
+      - description: Danh sách user ID
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AddUsersToGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Thêm người dùng vào nhóm
+      tags:
+      - Group
   /private/invitations/{id}/accept:
     put:
       description: Xác nhận tham gia sự kiện và thêm vào lịch Google
@@ -437,6 +1022,310 @@ paths:
       summary: Đếm số lời mời chờ duyệt
       tags:
       - Invitation
+  /private/meetings:
+    get:
+      description: Lấy danh sách sự kiện của người dùng
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.EventResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Lấy danh sách sự kiện
+      tags:
+      - Meeting
+    post:
+      consumes:
+      - application/json
+      description: Tạo một sự kiện hẹn mới với người tham gia
+      parameters:
+      - description: Thông tin sự kiện
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/go-api-starter_modules_meeting_dto.CreateEventRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.EventResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Tạo sự kiện hẹn
+      tags:
+      - Meeting
+  /private/meetings/{id}:
+    delete:
+      description: Xóa một sự kiện hẹn
+      parameters:
+      - description: Event ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Xóa sự kiện
+      tags:
+      - Meeting
+    get:
+      description: Lấy chi tiết một sự kiện hẹn theo ID
+      parameters:
+      - description: Event ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.EventResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Lấy thông tin sự kiện
+      tags:
+      - Meeting
+    put:
+      consumes:
+      - application/json
+      description: Cập nhật thông tin sự kiện hẹn
+      parameters:
+      - description: Event ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Thông tin cập nhật
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateEventRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.EventResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Cập nhật sự kiện
+      tags:
+      - Meeting
+  /private/meetings/{id}/find-slots:
+    post:
+      consumes:
+      - application/json
+      description: Tìm các khung giờ phù hợp cho sự kiện
+      parameters:
+      - description: Event ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Tham số tìm kiếm
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.FindSlotsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.FindSlotsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Tìm khung giờ rảnh
+      tags:
+      - Meeting
+  /private/meetings/{id}/select-slot:
+    post:
+      consumes:
+      - application/json
+      description: Chọn khung giờ cho sự kiện và tạo lịch
+      parameters:
+      - description: Event ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Thông tin khung giờ
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SelectSlotRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.EventResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Chọn khung giờ
+      tags:
+      - Meeting
+  /private/notifications:
+    get:
+      description: Trả về danh sách thông báo của người dùng hiện tại
+      parameters:
+      - description: Số trang
+        in: query
+        name: page
+        type: integer
+      - description: Số lượng mỗi trang
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Lấy danh sách thông báo
+      tags:
+      - Notification
+  /private/notifications/mark-all-read:
+    put:
+      description: Đánh dấu tất cả thông báo của người dùng là đã đọc
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Đánh dấu tất cả đã đọc
+      tags:
+      - Notification
+  /private/notifications/mark-read:
+    put:
+      consumes:
+      - application/json
+      description: Đánh dấu các thông báo cụ thể là đã đọc
+      parameters:
+      - description: Danh sách ID thông báo
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.MarkAsReadRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Đánh dấu đã đọc
+      tags:
+      - Notification
+  /private/notifications/unread-count:
+    get:
+      description: Trả về số lượng thông báo chưa đọc
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: integer
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Đếm thông báo chưa đọc
+      tags:
+      - Notification
 securityDefinitions:
   BearerAuth:
     description: 'JWT Bearer token. Example: "Bearer {token}"'

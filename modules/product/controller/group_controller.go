@@ -12,6 +12,18 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// PrivateCreateGroup creates a new group
+// @Summary Tạo nhóm mới
+// @Description Tạo một nhóm người dùng mới
+// @Tags Group
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param request body dto.GroupRequest true "Thông tin nhóm"
+// @Success 200 {object} entity.Group
+// @Failure 400 {object} errors.AppError
+// @Failure 401 {object} errors.AppError
+// @Router /private/groups [post]
 func (controller *ProductController) PrivateCreateGroup(c echo.Context) error {
 	ctx := c.Request().Context()
 
@@ -51,6 +63,16 @@ func (controller *ProductController) PrivateCreateGroup(c echo.Context) error {
 	return controller.SuccessResponse(c, responseData, "create group success")
 }
 
+// PrivateGetGroupById gets a group by ID
+// @Summary Lấy thông tin nhóm
+// @Description Lấy thông tin chi tiết của một nhóm theo ID
+// @Tags Group
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "Group ID"
+// @Success 200 {object} entity.Group
+// @Failure 404 {object} errors.AppError
+// @Router /private/groups/{id} [get]
 func (controller *ProductController) PrivateGetGroupById(c echo.Context) error {
 	ctx := c.Request().Context()
 
@@ -64,6 +86,18 @@ func (controller *ProductController) PrivateGetGroupById(c echo.Context) error {
 	return controller.SuccessResponse(c, group, "get group success")
 }
 
+// PrivateUpdateGroup updates a group
+// @Summary Cập nhật nhóm
+// @Description Cập nhật thông tin của nhóm
+// @Tags Group
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "Group ID"
+// @Param request body dto.GroupRequest true "Thông tin cập nhật"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} errors.AppError
+// @Router /private/groups/{id} [put]
 func (controller *ProductController) PrivateUpdateGroup(c echo.Context) error {
 	ctx := c.Request().Context()
 
@@ -87,6 +121,15 @@ func (controller *ProductController) PrivateUpdateGroup(c echo.Context) error {
 	return controller.SuccessResponse(c, nil, "update group success")
 }
 
+// PrivateDeleteGroup deletes a group
+// @Summary Xóa nhóm
+// @Description Xóa một nhóm theo ID
+// @Tags Group
+// @Security BearerAuth
+// @Param id path string true "Group ID"
+// @Success 200 {object} map[string]string
+// @Failure 404 {object} errors.AppError
+// @Router /private/groups/{id} [delete]
 func (controller *ProductController) PrivateDeleteGroup(c echo.Context) error {
 	ctx := c.Request().Context()
 
@@ -99,6 +142,17 @@ func (controller *ProductController) PrivateDeleteGroup(c echo.Context) error {
 	return controller.SuccessResponse(c, nil, "delete group success")
 }
 
+// PrivateGetGroups gets all groups for current user
+// @Summary Lấy danh sách nhóm
+// @Description Lấy danh sách các nhóm mà người dùng tham gia
+// @Tags Group
+// @Security BearerAuth
+// @Produce json
+// @Param page query int false "Số trang"
+// @Param limit query int false "Số lượng mỗi trang"
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} errors.AppError
+// @Router /private/groups [get]
 func (controller *ProductController) PrivateGetGroups(c echo.Context) error {
 	ctx := c.Request().Context()
 
@@ -141,6 +195,17 @@ func (controller *ProductController) PublicGetGroupById(c echo.Context) error {
 
 // UserGroup controller methods - Quản lý user trong group
 
+// PrivateAddUsersToGroup adds users to a group
+// @Summary Thêm người dùng vào nhóm
+// @Description Thêm một hoặc nhiều người dùng vào nhóm
+// @Tags Group
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param request body dto.AddUsersToGroupRequest true "Danh sách user ID"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} errors.AppError
+// @Router /private/groups/users [post]
 func (controller *ProductController) PrivateAddUsersToGroup(c echo.Context) error {
 	ctx := c.Request().Context()
 
@@ -186,6 +251,17 @@ func (controller *ProductController) PrivateAddUsersToGroup(c echo.Context) erro
 	return controller.SuccessResponse(c, nil, "add users to group success")
 }
 
+// PrivateRemoveUserFromGroup removes a user from a group
+// @Summary Xóa người dùng khỏi nhóm
+// @Description Xóa một người dùng khỏi nhóm
+// @Tags Group
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param request body dto.RemoveUserFromGroupRequest true "Thông tin xóa"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} errors.AppError
+// @Router /private/groups/users [delete]
 func (controller *ProductController) PrivateRemoveUserFromGroup(c echo.Context) error {
 	ctx := c.Request().Context()
 
@@ -207,6 +283,16 @@ func (controller *ProductController) PrivateRemoveUserFromGroup(c echo.Context) 
 	return controller.SuccessResponse(c, nil, "remove user from group success")
 }
 
+// PrivateGetUsersByGroupId gets users in a group
+// @Summary Lấy danh sách thành viên
+// @Description Lấy danh sách người dùng trong một nhóm
+// @Tags Group
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "Group ID"
+// @Success 200 {array} map[string]interface{}
+// @Failure 404 {object} errors.AppError
+// @Router /private/groups/{id}/users [get]
 func (controller *ProductController) PrivateGetUsersByGroupId(c echo.Context) error {
 	ctx := c.Request().Context()
 
