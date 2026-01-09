@@ -13,6 +13,7 @@ import (
 	// storageClient "go-api-starter/core/storage"
 	"go-api-starter/core/utils"
 	"go-api-starter/modules/auth"
+	"go-api-starter/modules/booking"
 	"go-api-starter/modules/calendar"
 	"go-api-starter/modules/invitation"
 	"go-api-starter/modules/meeting"
@@ -156,6 +157,7 @@ func initServer() (*Server, error) {
 	invitationService := invitation.Init(e.Group("/api/v1/private"), db, mw, notifService)
 
 	calendar.Init(e, db, *redisCache, notifService, invitationService)
+	booking.Init(e, db, *redisCache, notifService, invitationService)
 	meeting.Init(e, db, mw)
 
 	// Initialize Asynq worker server

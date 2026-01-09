@@ -80,6 +80,7 @@ type AuthServiceInterface interface {
 	GetUserIDBySocialLoginID(ctx context.Context, socialLoginID uuid.UUID) (uuid.UUID, *errors.AppError)
 	GetSocialLoginByUserAndProviderName(ctx context.Context, userID uuid.UUID, providerName string) (*entity.SocialLogin, *errors.AppError)
 	GetSocialLoginByID(ctx context.Context, id uuid.UUID) (*entity.SocialLogin, *errors.AppError)
+	GetSocialLoginBySlug(ctx context.Context, slug string) (*entity.SocialLogin, *errors.AppError)
 
 	// Social Users search methods
 	SearchSocialUsers(ctx context.Context, query string) ([]repository.SocialUserResult, error)
