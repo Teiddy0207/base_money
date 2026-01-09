@@ -923,6 +923,7 @@ func templateEscape(s string) string {
 }
 
 
+
 func formatTimeInTimezone(t time.Time, timezone string) string {
 	loc, err := time.LoadLocation(timezone)
 	if err != nil {
@@ -968,6 +969,17 @@ func (b *BookingController) PrivateListPending(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"items": res})
 }
 
+// PrivateAcceptRequest accepts a booking request
+// @Summary Chấp nhận yêu cầu đặt lịch
+// @Description Chấp nhận yêu cầu đặt lịch và tạo sự kiện trên Calendar
+// @Tags Booking
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "Event ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} errors.AppError
+// @Failure 401 {object} errors.AppError
+// @Router /private/booking/{id}/accept [post]
 func (b *BookingController) PrivateAcceptRequest(c echo.Context) error {
 	tokenData := c.Get(constants.ContextTokenData)
 	if tokenData == nil {
@@ -1071,6 +1083,17 @@ func (b *BookingController) PrivateAcceptRequest(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"message": "accepted", "event_id": ev.ID.String()})
 }
 
+// PrivateDeclineRequest declines a booking request
+// @Summary Từ chối yêu cầu đặt lịch
+// @Description Từ chối yêu cầu đặt lịch
+// @Tags Booking
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "Event ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} errors.AppError
+// @Failure 401 {object} errors.AppError
+// @Router /private/booking/{id}/decline [post]
 func (b *BookingController) PrivateDeclineRequest(c echo.Context) error {
 	tokenData := c.Get(constants.ContextTokenData)
 	if tokenData == nil {

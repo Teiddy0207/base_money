@@ -29,6 +29,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	echo_middleware "github.com/labstack/echo/v4/middleware"
+	echoSwagger "github.com/swaggo/echo-swagger"
 )
 
 type Server struct {
@@ -141,6 +142,9 @@ func initServer() (*Server, error) {
 	e.Use(echo_middleware.Recover())
 	e.Use(middleware.LoggerMiddleware())
 	e.Use(middleware.CORSMiddleware())
+
+	// Swagger API documentation
+	e.GET("/swagger/*", echoSwagger.WrapHandler)
 
 	// Initialize modules
 	product.Init(e, db, *redisCache)

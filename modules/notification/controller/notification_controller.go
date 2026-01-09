@@ -24,6 +24,17 @@ func NewNotificationController(service *service.NotificationService) *Notificati
 	}
 }
 
+// GetMyNotifications retrieves user's notifications
+// @Summary Lấy danh sách thông báo
+// @Description Trả về danh sách thông báo của người dùng hiện tại
+// @Tags Notification
+// @Security BearerAuth
+// @Produce json
+// @Param page query int false "Số trang"
+// @Param limit query int false "Số lượng mỗi trang"
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} errors.AppError
+// @Router /private/notifications [get]
 func (c *NotificationController) GetMyNotifications(ctx echo.Context) error {
 	userID, err := getUserIDFromContext(ctx)
 	if err != nil {
@@ -39,6 +50,18 @@ func (c *NotificationController) GetMyNotifications(ctx echo.Context) error {
 	return c.SuccessResponse(ctx, result, "Notifications retrieved successfully")
 }
 
+// MarkAsRead marks specific notifications as read
+// @Summary Đánh dấu đã đọc
+// @Description Đánh dấu các thông báo cụ thể là đã đọc
+// @Tags Notification
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param request body dto.MarkAsReadRequest true "Danh sách ID thông báo"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} errors.AppError
+// @Failure 401 {object} errors.AppError
+// @Router /private/notifications/mark-read [put]
 func (c *NotificationController) MarkAsRead(ctx echo.Context) error {
 	userID, err := getUserIDFromContext(ctx)
 	if err != nil {
@@ -57,6 +80,15 @@ func (c *NotificationController) MarkAsRead(ctx echo.Context) error {
 	return c.SuccessResponse(ctx, nil, "Marked as read successfully")
 }
 
+// MarkAllAsRead marks all notifications as read
+// @Summary Đánh dấu tất cả đã đọc
+// @Description Đánh dấu tất cả thông báo của người dùng là đã đọc
+// @Tags Notification
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} map[string]string
+// @Failure 401 {object} errors.AppError
+// @Router /private/notifications/mark-all-read [put]
 func (c *NotificationController) MarkAllAsRead(ctx echo.Context) error {
 	userID, err := getUserIDFromContext(ctx)
 	if err != nil {
@@ -70,6 +102,15 @@ func (c *NotificationController) MarkAllAsRead(ctx echo.Context) error {
 	return c.SuccessResponse(ctx, nil, "Marked all as read successfully")
 }
 
+// CountUnread counts unread notifications
+// @Summary Đếm thông báo chưa đọc
+// @Description Trả về số lượng thông báo chưa đọc
+// @Tags Notification
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} map[string]int
+// @Failure 401 {object} errors.AppError
+// @Router /private/notifications/unread-count [get]
 func (c *NotificationController) CountUnread(ctx echo.Context) error {
 	userID, err := getUserIDFromContext(ctx)
 	if err != nil {

@@ -43,6 +43,17 @@ func (c *MeetingController) getUserIDFromContext(ctx echo.Context) (uuid.UUID, e
 }
 
 // CreateEvent handles POST /events
+// @Summary Tạo sự kiện hẹn
+// @Description Tạo một sự kiện hẹn mới với người tham gia
+// @Tags Meeting
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param request body dto.CreateEventRequest true "Thông tin sự kiện"
+// @Success 200 {object} dto.EventResponse
+// @Failure 400 {object} errors.AppError
+// @Failure 401 {object} errors.AppError
+// @Router /private/meetings [post]
 func (c *MeetingController) CreateEvent(ctx echo.Context) error {
 	hostID, err := c.getUserIDFromContext(ctx)
 	if err != nil {
@@ -63,6 +74,15 @@ func (c *MeetingController) CreateEvent(ctx echo.Context) error {
 }
 
 // GetEvent handles GET /events/:id
+// @Summary Lấy thông tin sự kiện
+// @Description Lấy chi tiết một sự kiện hẹn theo ID
+// @Tags Meeting
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "Event ID"
+// @Success 200 {object} dto.EventResponse
+// @Failure 404 {object} errors.AppError
+// @Router /private/meetings/{id} [get]
 func (c *MeetingController) GetEvent(ctx echo.Context) error {
 	eventID, err := uuid.Parse(ctx.Param("id"))
 	if err != nil {
@@ -78,6 +98,14 @@ func (c *MeetingController) GetEvent(ctx echo.Context) error {
 }
 
 // GetMyEvents handles GET /events
+// @Summary Lấy danh sách sự kiện
+// @Description Lấy danh sách sự kiện của người dùng
+// @Tags Meeting
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {array} dto.EventResponse
+// @Failure 401 {object} errors.AppError
+// @Router /private/meetings [get]
 func (c *MeetingController) GetMyEvents(ctx echo.Context) error {
 	hostID, err := c.getUserIDFromContext(ctx)
 	if err != nil {
@@ -93,6 +121,17 @@ func (c *MeetingController) GetMyEvents(ctx echo.Context) error {
 }
 
 // UpdateEvent handles PUT /events/:id
+// @Summary Cập nhật sự kiện
+// @Description Cập nhật thông tin sự kiện hẹn
+// @Tags Meeting
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "Event ID"
+// @Param request body dto.UpdateEventRequest true "Thông tin cập nhật"
+// @Success 200 {object} dto.EventResponse
+// @Failure 400 {object} errors.AppError
+// @Router /private/meetings/{id} [put]
 func (c *MeetingController) UpdateEvent(ctx echo.Context) error {
 	hostID, err := c.getUserIDFromContext(ctx)
 	if err != nil {
@@ -118,6 +157,14 @@ func (c *MeetingController) UpdateEvent(ctx echo.Context) error {
 }
 
 // DeleteEvent handles DELETE /events/:id
+// @Summary Xóa sự kiện
+// @Description Xóa một sự kiện hẹn
+// @Tags Meeting
+// @Security BearerAuth
+// @Param id path string true "Event ID"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} errors.AppError
+// @Router /private/meetings/{id} [delete]
 func (c *MeetingController) DeleteEvent(ctx echo.Context) error {
 	hostID, err := c.getUserIDFromContext(ctx)
 	if err != nil {
@@ -138,6 +185,17 @@ func (c *MeetingController) DeleteEvent(ctx echo.Context) error {
 }
 
 // FindSlots handles POST /events/:id/find-slots
+// @Summary Tìm khung giờ rảnh
+// @Description Tìm các khung giờ phù hợp cho sự kiện
+// @Tags Meeting
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "Event ID"
+// @Param request body dto.FindSlotsRequest true "Tham số tìm kiếm"
+// @Success 200 {object} dto.FindSlotsResponse
+// @Failure 400 {object} errors.AppError
+// @Router /private/meetings/{id}/find-slots [post]
 func (c *MeetingController) FindSlots(ctx echo.Context) error {
 	eventID, err := uuid.Parse(ctx.Param("id"))
 	if err != nil {
@@ -158,6 +216,17 @@ func (c *MeetingController) FindSlots(ctx echo.Context) error {
 }
 
 // SelectSlot handles POST /events/:id/select-slot
+// @Summary Chọn khung giờ
+// @Description Chọn khung giờ cho sự kiện và tạo lịch
+// @Tags Meeting
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "Event ID"
+// @Param request body dto.SelectSlotRequest true "Thông tin khung giờ"
+// @Success 200 {object} dto.EventResponse
+// @Failure 400 {object} errors.AppError
+// @Router /private/meetings/{id}/select-slot [post]
 func (c *MeetingController) SelectSlot(ctx echo.Context) error {
 	hostID, err := c.getUserIDFromContext(ctx)
 	if err != nil {
