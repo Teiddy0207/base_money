@@ -1,0 +1,446 @@
+basePath: /api/v1
+definitions:
+  dto.CalendarConnectionListResponse:
+    properties:
+      connections:
+        items:
+          $ref: '#/definitions/dto.CalendarConnectionResponse'
+        type: array
+    type: object
+  dto.CalendarConnectionResponse:
+    properties:
+      calendar_email:
+        type: string
+      connected_at:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      provider:
+        type: string
+    type: object
+  dto.CreateEventResponse:
+    properties:
+      end_time:
+        type: string
+      event_id:
+        type: string
+      meeting_link:
+        type: string
+      start_time:
+        type: string
+      title:
+        type: string
+    type: object
+  dto.DisconnectedUser:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      user_id:
+        type: string
+    type: object
+  dto.EventDataDTO:
+    properties:
+      description:
+        type: string
+      end_time:
+        type: string
+      location:
+        type: string
+      meeting_link:
+        type: string
+      start_time:
+        type: string
+      timezone:
+        type: string
+      title:
+        type: string
+    type: object
+  dto.InvitationResponse:
+    properties:
+      created_at:
+        type: string
+      creator_id:
+        type: string
+      event_data:
+        $ref: '#/definitions/dto.EventDataDTO'
+      event_google_id:
+        type: string
+      id:
+        type: string
+      status:
+        type: string
+    type: object
+  dto.SuggestedSlot:
+    properties:
+      available_count:
+        type: integer
+      end_time:
+        description: RFC3339
+        type: string
+      score:
+        description: 0-100 based on availability
+        type: integer
+      start_time:
+        description: RFC3339
+        type: string
+      total_count:
+        type: integer
+    type: object
+  dto.SuggestedSlotsRequest:
+    properties:
+      days_ahead:
+        description: default 7
+        type: integer
+      duration_minutes:
+        type: integer
+      start_date:
+        description: optional, RFC3339 date (YYYY-MM-DD)
+        type: string
+      time_preference:
+        description: '"morning", "afternoon", "evening", "" for no preference'
+        type: string
+      user_ids:
+        items:
+          type: string
+        type: array
+      working_hours_only:
+        description: 8:00-18:00
+        type: boolean
+    type: object
+  dto.SuggestedSlotsResponse:
+    properties:
+      connected_count:
+        type: integer
+      disconnected_count:
+        type: integer
+      disconnected_users:
+        items:
+          $ref: '#/definitions/dto.DisconnectedUser'
+        type: array
+      slots:
+        items:
+          $ref: '#/definitions/dto.SuggestedSlot'
+        type: array
+      total_participants:
+        type: integer
+      warning:
+        type: string
+    type: object
+  errors.AppError:
+    properties:
+      code:
+        $ref: '#/definitions/errors.ErrorCode'
+      message:
+        type: string
+    type: object
+  errors.ErrorCode:
+    enum:
+    - 1000
+    - 1001
+    - 1002
+    - 1003
+    - 1004
+    - 1005
+    - 2006
+    - 2007
+    - 2008
+    - 2009
+    - 2010
+    - 3011
+    - 3012
+    - 3013
+    - 3014
+    - 3015
+    - 3016
+    - 3017
+    - 3018
+    - 3019
+    - 3020
+    - 3021
+    - 4022
+    - 4023
+    - 4024
+    - 4025
+    - 5026
+    - 5027
+    - 5028
+    - 5029
+    - 6030
+    - 6031
+    - 6032
+    - 6033
+    - 7034
+    - 7035
+    type: integer
+    x-enum-varnames:
+    - ErrInvalidCredentials
+    - ErrTokenExpired
+    - ErrUnauthorized
+    - ErrForbidden
+    - ErrMissingAuthorizationHeader
+    - ErrInvalidTokenFormat
+    - ErrInvalidInput
+    - ErrInvalidEmail
+    - ErrInvalidPassword
+    - ErrInvalidFormat
+    - ErrInvalidRequestData
+    - ErrNotFound
+    - ErrAlreadyExists
+    - ErrResourceLocked
+    - ErrResourceExpired
+    - ErrCreateFailed
+    - ErrGetFailed
+    - ErrInvalidSlug
+    - ErrDuplicateSlug
+    - ErrInvalidParent
+    - ErrUpdateFailed
+    - ErrDeleteFailed
+    - ErrDatabase
+    - ErrDatabaseTimeout
+    - ErrUniqueViolation
+    - ErrForeignKey
+    - ErrBusinessRule
+    - ErrInvalidState
+    - ErrLimitExceeded
+    - ErrOperationFailed
+    - ErrInternalServer
+    - ErrConfiguration
+    - ErrThirdParty
+    - ErrNetwork
+    - ErrUploadToR2
+    - ErrSaveStorageDb
+  go-api-starter_modules_calendar_dto.CreateEventRequest:
+    properties:
+      attendees:
+        description: Email addresses
+        items:
+          type: string
+        type: array
+      description:
+        type: string
+      end_time:
+        description: RFC3339
+        type: string
+      meeting_link:
+        type: string
+      start_time:
+        description: RFC3339
+        type: string
+      timezone:
+        type: string
+      title:
+        type: string
+    required:
+    - end_time
+    - start_time
+    - title
+    type: object
+host: localhost:7070
+info:
+  contact:
+    email: support@smartschedule.com
+    name: API Support
+  description: API Backend cho ứng dụng SmartSchedule - Lịch hẹn thông minh
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: SmartSchedule API
+  version: "1.0"
+paths:
+  /private/calendar/connections:
+    get:
+      description: Trả về tất cả các lịch đã kết nối của người dùng hiện tại
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CalendarConnectionListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Lấy danh sách kết nối lịch
+      tags:
+      - Calendar
+  /private/calendar/events:
+    post:
+      consumes:
+      - application/json
+      description: Tạo sự kiện mới trên Google Calendar
+      parameters:
+      - description: Thông tin sự kiện
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/go-api-starter_modules_calendar_dto.CreateEventRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.CreateEventResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Tạo sự kiện lịch
+      tags:
+      - Calendar
+  /private/calendar/suggested-slots:
+    post:
+      consumes:
+      - application/json
+      description: Tìm các khung giờ mà tất cả người tham gia đều rảnh
+      parameters:
+      - description: Yêu cầu tìm khung giờ
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SuggestedSlotsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.SuggestedSlotsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Tìm khung giờ rảnh
+      tags:
+      - Calendar
+  /private/invitations/{id}/accept:
+    put:
+      description: Xác nhận tham gia sự kiện và thêm vào lịch Google
+      parameters:
+      - description: Invitation ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.InvitationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Chấp nhận lời mời
+      tags:
+      - Invitation
+  /private/invitations/{id}/decline:
+    put:
+      description: Từ chối tham gia sự kiện
+      parameters:
+      - description: Invitation ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.AppError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Từ chối lời mời
+      tags:
+      - Invitation
+  /private/invitations/pending:
+    get:
+      description: Trả về danh sách các lời mời sự kiện đang chờ người dùng xác nhận
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.InvitationResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Lấy lời mời chờ duyệt
+      tags:
+      - Invitation
+  /private/invitations/pending/count:
+    get:
+      description: Trả về số lượng lời mời đang chờ xác nhận
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: integer
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/errors.AppError'
+      security:
+      - BearerAuth: []
+      summary: Đếm số lời mời chờ duyệt
+      tags:
+      - Invitation
+securityDefinitions:
+  BearerAuth:
+    description: 'JWT Bearer token. Example: "Bearer {token}"'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

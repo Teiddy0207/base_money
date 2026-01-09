@@ -22,7 +22,14 @@ func NewCalendarController(service service.CalendarService) *CalendarController 
 }
 
 // GetConnections returns all calendar connections for the current user
-// GET /api/v1/private/calendar/connections
+// @Summary Lấy danh sách kết nối lịch
+// @Description Trả về tất cả các lịch đã kết nối của người dùng hiện tại
+// @Tags Calendar
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} dto.CalendarConnectionListResponse
+// @Failure 401 {object} errors.AppError
+// @Router /private/calendar/connections [get]
 func (c *CalendarController) GetConnections(ctx echo.Context) error {
 	userID, err := getUserIDFromContext(ctx)
 	if err != nil {
@@ -121,7 +128,17 @@ func (c *CalendarController) GetFreeBusy(ctx echo.Context) error {
 }
 
 // CreateEvent creates a calendar event
-// POST /api/v1/private/calendar/events
+// @Summary Tạo sự kiện lịch
+// @Description Tạo sự kiện mới trên Google Calendar
+// @Tags Calendar
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param request body dto.CreateEventRequest true "Thông tin sự kiện"
+// @Success 201 {object} dto.CreateEventResponse
+// @Failure 400 {object} errors.AppError
+// @Failure 401 {object} errors.AppError
+// @Router /private/calendar/events [post]
 func (c *CalendarController) CreateEvent(ctx echo.Context) error {
 	userID, err := getUserIDFromContext(ctx)
 	if err != nil {
@@ -167,7 +184,17 @@ func (c *CalendarController) DeleteEvent(ctx echo.Context) error {
 }
 
 // GetSuggestedSlots finds available meeting time slots
-// POST /api/v1/private/calendar/suggested-slots
+// @Summary Tìm khung giờ rảnh
+// @Description Tìm các khung giờ mà tất cả người tham gia đều rảnh
+// @Tags Calendar
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param request body dto.SuggestedSlotsRequest true "Yêu cầu tìm khung giờ"
+// @Success 200 {object} dto.SuggestedSlotsResponse
+// @Failure 400 {object} errors.AppError
+// @Failure 401 {object} errors.AppError
+// @Router /private/calendar/suggested-slots [post]
 func (c *CalendarController) GetSuggestedSlots(ctx echo.Context) error {
 	// Get current user (event creator)
 	currentUserID, err := getUserIDFromContext(ctx)
