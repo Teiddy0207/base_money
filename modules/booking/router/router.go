@@ -33,6 +33,12 @@ func (r *BookingRouter) Setup(e *echo.Echo, mw interface{}) {
 			req.GET("", r.Controller.PrivateListPending)
 			req.POST("/:id/accept", r.Controller.PrivateAcceptRequest)
 			req.POST("/:id/decline", r.Controller.PrivateDeclineRequest)
+			
+			// Personal booking URL endpoint
+			booking := priv.Group("/booking")
+			booking.GET("/personal-url", r.Controller.GetPersonalBookingURL)
+			booking.GET("/week-statistics", r.Controller.GetWeekStatistics)
 		}
 	}
 }
+
