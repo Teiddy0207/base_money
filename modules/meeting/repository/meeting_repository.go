@@ -6,6 +6,7 @@ import (
 	"go-api-starter/core/database"
 	"go-api-starter/core/logger"
 	"go-api-starter/modules/meeting/entity"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -110,6 +111,20 @@ func (r *MeetingRepository) UpdateEvent(ctx context.Context, event *entity.Event
 		    start_date = $7, end_date = $8, meeting_link = $9, preferences = $10, updated_at = NOW()
 		WHERE id = $1
 	`
+
+	// Log time values before saving
+	if event.StartDate != nil {
+		logger.Info("MeetingRepository:UpdateEvent:BeforeSave",
+			"event_id", event.ID.String(),
+			"start_date_utc", event.StartDate.UTC().Format(time.RFC3339),
+			"start_date_local", event.StartDate.Format(time.RFC3339))
+	}
+	if event.EndDate != nil {
+		logger.Info("MeetingRepository:UpdateEvent:BeforeSave",
+			"event_id", event.ID.String(),
+			"end_date_utc", event.EndDate.UTC().Format(time.RFC3339),
+			"end_date_local", event.EndDate.Format(time.RFC3339))
+	}
 
 	err := r.DB.ExecContext(ctx, query,
 		event.ID, event.Title, event.Description, event.Address, event.DurationMinutes,

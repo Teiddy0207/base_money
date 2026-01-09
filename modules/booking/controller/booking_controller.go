@@ -250,14 +250,43 @@ async function loadSlotsForDay(date){
   const res=await fetch('/api/v1/public/booking/'+encodeURIComponent(id)+'/suggested-slots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
   const data=await res.json()
   const slots=(data&&data.slots)||[]
+  // Helper function to convert UTC time to VN timezone and format
+  const formatTimeVN = (timeStr) => {
+    const d = new Date(timeStr)
+    // Use Intl.DateTimeFormat to get VN time components accurately
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    })
+    const parts = formatter.formatToParts(d)
+    const y = parts.find(p => p.type === 'year').value
+    const m = parts.find(p => p.type === 'month').value
+    const day = parts.find(p => p.type === 'day').value
+    const h = parts.find(p => p.type === 'hour').value
+    const min = parts.find(p => p.type === 'minute').value
+    const sec = parts.find(p => p.type === 'second').value
+    return {date: y + '-' + m + '-' + day, time: h + ':' + min, full: y + '-' + m + '-' + day + 'T' + h + ':' + min + ':' + sec + '+07:00'}
+  }
+  
   slots.forEach(s=>{
-    var part = ''
-    var st = (s.start_time||'')
-    var arr = st.split('T')
-    if (arr.length > 1 && arr[1]) { part = arr[1] }
-    var t = part ? part.slice(0,5) : ''
-    const el=document.createElement('div'); el.className='slot'; el.textContent=t
-    el.onclick=()=>{selectedSlot={start:(s.start_time||''), end:(s.end_time||'')}; setActiveSlot(el)}
+    const startTime = s.start_time || ''
+    const endTime = s.end_time || ''
+    // Convert to VN timezone for display
+    const startVN = formatTimeVN(startTime)
+    // Display time (HH:mm)
+    const el=document.createElement('div'); el.className='slot'; el.textContent=startVN.time
+    el.onclick=()=>{
+      // When user selects slot, use the same VN timezone format
+      const endVN = formatTimeVN(endTime)
+      selectedSlot={start:startVN.full, end:endVN.full}
+      setActiveSlot(el)
+    }
     root.appendChild(el)
   })
   } catch (e) {
@@ -333,12 +362,30 @@ func (b *BookingController) handleAcceptFromPersonalPage(c echo.Context, idStr, 
 		guestEmail = strings.TrimSpace(p.GuestEmail)
 	}
 	
+	// Get timezone, default to Asia/Ho_Chi_Minh if empty
+	timezone := ev.Timezone
+	if timezone == "" {
+		timezone = "Asia/Ho_Chi_Minh"
+	}
+	
+	// IMPORTANT: Add 1 day to the booking time when accepting
+	// User selects time, but when accepting, automatically add 1 day
+	adjustedStartDate := ev.StartDate.AddDate(0, 0, 1)
+	adjustedEndDate := ev.EndDate.AddDate(0, 0, 1)
+	
+	logger.Info("handleAcceptFromPersonalPage:TimeAdjusted",
+		"event_id", eventID.String(),
+		"original_start", ev.StartDate.Format(time.RFC3339),
+		"adjusted_start", adjustedStartDate.Format(time.RFC3339),
+		"original_end", ev.EndDate.Format(time.RFC3339),
+		"adjusted_end", adjustedEndDate.Format(time.RFC3339))
+	
 	req := &caldto.CreateEventRequest{
 		Title:       ev.Title,
 		Description: "Personal booking",
-		StartTime:   ev.StartDate.Format(time.RFC3339),
-		EndTime:     ev.EndDate.Format(time.RFC3339),
-		Timezone:    ev.Timezone,
+		StartTime:   formatTimeInTimezone(adjustedStartDate, timezone),
+		EndTime:     formatTimeInTimezone(adjustedEndDate, timezone),
+		Timezone:    timezone,
 	}
 	if guestEmail != "" {
 		req.Attendees = []string{guestEmail}
@@ -358,12 +405,19 @@ func (b *BookingController) handleAcceptFromPersonalPage(c echo.Context, idStr, 
 		return c.JSON(http.StatusInternalServerError, errors.NewAppError(errors.ErrInternalServer, "failed to update event", err))
 	}
 
-	// Format event time for display
+	// Format event time for display (with +1 day adjustment)
 	eventTimeStr := "Chưa xác định"
 	if ev.StartDate != nil && ev.EndDate != nil {
-		startTime := ev.StartDate.Format("15:04")
-		endTime := ev.EndDate.Format("15:04")
-		dateStr := ev.StartDate.Format("02/01/2006")
+		// Add 1 day for display (same as when creating calendar event)
+		adjustedStartDate := ev.StartDate.AddDate(0, 0, 1)
+		adjustedEndDate := ev.EndDate.AddDate(0, 0, 1)
+		// Convert to VN timezone for display
+		vnLoc, _ := time.LoadLocation("Asia/Ho_Chi_Minh")
+		startVN := adjustedStartDate.In(vnLoc)
+		endVN := adjustedEndDate.In(vnLoc)
+		startTime := startVN.Format("15:04")
+		endTime := endVN.Format("15:04")
+		dateStr := startVN.Format("02/01/2006")
 		eventTimeStr = fmt.Sprintf("%s, %s - %s", dateStr, startTime, endTime)
 	}
 
@@ -635,6 +689,12 @@ func (b *BookingController) PublicSchedule(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, errors.NewAppError(errors.ErrInvalidInput, "invalid body", nil))
 	}
+	// Parse time from RFC3339 format (e.g., "2026-01-28T12:00:00+07:00")
+	// This preserves the timezone information
+	logger.Info("PublicSchedule:ParseTime",
+		"start_time_string", req.StartTime,
+		"end_time_string", req.EndTime)
+	
 	start, err := time.Parse(time.RFC3339, req.StartTime)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errors.NewAppError(errors.ErrInvalidInput, "invalid start_time", nil))
@@ -643,6 +703,25 @@ func (b *BookingController) PublicSchedule(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errors.NewAppError(errors.ErrInvalidInput, "invalid end_time", nil))
 	}
+	
+	// Log parsed time values
+	logger.Info("PublicSchedule:ParsedTime",
+		"start_utc", start.UTC().Format(time.RFC3339),
+		"start_local", start.Format(time.RFC3339),
+		"end_utc", end.UTC().Format(time.RFC3339),
+		"end_local", end.Format(time.RFC3339))
+	
+	// IMPORTANT: When time is parsed from RFC3339 with timezone, Go creates a time.Time
+	// with the correct absolute value (Unix timestamp). However, when saving to PostgreSQL
+	// (TIMESTAMP WITH TIME ZONE), we need to ensure the time is in UTC to avoid confusion.
+	// Convert to UTC explicitly to ensure correct storage.
+	start = start.UTC()
+	end = end.UTC()
+	
+	logger.Info("PublicSchedule:TimeConvertedToUTC",
+		"start_utc", start.Format(time.RFC3339),
+		"end_utc", end.Format(time.RFC3339))
+	
 	slID, ok := tryParseUUID(slug)
 	var userID uuid.UUID
 	var hostEmail string
@@ -711,7 +790,15 @@ func (b *BookingController) PublicSchedule(c echo.Context) error {
 		}
 		acceptURL := base + "/api/v1/public/booking/requests/" + created.ID.String() + "/accept?token=" + approveToken
 		declineURL := base + "/api/v1/public/booking/requests/" + created.ID.String() + "/decline?token=" + declineToken
-		body := "<h3>New booking request</h3><p>Guest: " + templateEscape(req.Name) + " (" + templateEscape(strings.TrimSpace(req.Email)) + ")</p><p>Time: " + start.Format(time.RFC3339) + " → " + end.Format(time.RFC3339) + "</p><p><a href=\"" + templateEscape(acceptURL) + "\">Accept</a> &nbsp;|&nbsp; <a href=\"" + templateEscape(declineURL) + "\">Decline</a></p>"
+		// Format time in VN timezone for email (with +1 day adjustment - same as when accepting)
+		// Add 1 day to show the actual time that will be scheduled when accepted
+		adjustedStart := start.AddDate(0, 0, 1)
+		adjustedEnd := end.AddDate(0, 0, 1)
+		vnLoc, _ := time.LoadLocation("Asia/Ho_Chi_Minh")
+		startVN := adjustedStart.In(vnLoc)
+		endVN := adjustedEnd.In(vnLoc)
+		timeStr := fmt.Sprintf("%s %s - %s", startVN.Format("02/01/2006"), startVN.Format("15:04"), endVN.Format("15:04"))
+		body := "<h3>New booking request</h3><p>Guest: " + templateEscape(req.Name) + " (" + templateEscape(strings.TrimSpace(req.Email)) + ")</p><p>Time: " + templateEscape(timeStr) + "</p><p><a href=\"" + templateEscape(acceptURL) + "\">Accept</a> &nbsp;|&nbsp; <a href=\"" + templateEscape(declineURL) + "\">Decline</a></p>"
 		_ = utils.SendEmailTLS(*conf, utils.EmailMessage{
 			To:      []string{hostEmail},
 			Subject: "New booking request",
@@ -835,6 +922,23 @@ func templateEscape(s string) string {
 	return html.EscapeString(s)
 }
 
+
+func formatTimeInTimezone(t time.Time, timezone string) string {
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		// Fallback to Asia/Ho_Chi_Minh if timezone is invalid
+		loc, _ = time.LoadLocation("Asia/Ho_Chi_Minh")
+	}
+	
+	// Convert UTC time to the target timezone to get the local representation
+	// This gives us the correct date/time components in that timezone
+	tInTZ := t.In(loc)
+	
+	// Format as RFC3339 WITH timezone offset (+07:00)
+	// This ensures Google Calendar receives the time with correct timezone information
+	return tInTZ.Format(time.RFC3339)
+}
+
 func (b *BookingController) PrivateListPending(c echo.Context) error {
 	tokenData := c.Get(constants.ContextTokenData)
 	if tokenData == nil {
@@ -899,12 +1003,31 @@ func (b *BookingController) PrivateAcceptRequest(c echo.Context) error {
 		_ = json.Unmarshal([]byte(*ev.Preferences), &p)
 		guestEmail = strings.TrimSpace(p.GuestEmail)
 	}
+	
+	// Get timezone, default to Asia/Ho_Chi_Minh if empty
+	timezone := ev.Timezone
+	if timezone == "" {
+		timezone = "Asia/Ho_Chi_Minh"
+	}
+	
+	// IMPORTANT: Add 1 day to the booking time when accepting
+	// User selects time, but when accepting, automatically add 1 day
+	adjustedStartDate := ev.StartDate.AddDate(0, 0, 1)
+	adjustedEndDate := ev.EndDate.AddDate(0, 0, 1)
+	
+	logger.Info("PrivateAcceptRequest:TimeAdjusted",
+		"event_id", eventID.String(),
+		"original_start", ev.StartDate.Format(time.RFC3339),
+		"adjusted_start", adjustedStartDate.Format(time.RFC3339),
+		"original_end", ev.EndDate.Format(time.RFC3339),
+		"adjusted_end", adjustedEndDate.Format(time.RFC3339))
+	
 	req := &caldto.CreateEventRequest{
 		Title:       ev.Title,
 		Description: "Personal booking",
-		StartTime:   ev.StartDate.Format(time.RFC3339),
-		EndTime:     ev.EndDate.Format(time.RFC3339),
-		Timezone:    ev.Timezone,
+		StartTime:   formatTimeInTimezone(adjustedStartDate, timezone),
+		EndTime:     formatTimeInTimezone(adjustedEndDate, timezone),
+		Timezone:    timezone,
 	}
 	if guestEmail != "" {
 		req.Attendees = []string{guestEmail}
@@ -929,7 +1052,15 @@ func (b *BookingController) PrivateAcceptRequest(c echo.Context) error {
 		if created.MeetingLink != "" {
 			link = created.MeetingLink
 		}
-		body := "<h3>Booking confirmed</h3><p>Title: " + templateEscape(ev.Title) + "</p><p>Time: " + ev.StartDate.Format(time.RFC3339) + " → " + ev.EndDate.Format(time.RFC3339) + "</p><p>Meeting link: " + templateEscape(link) + "</p>"
+		// Format time in VN timezone for email (human-readable format, with +1 day adjustment)
+		// Add 1 day for email display (same as when creating calendar event)
+		adjustedStartDate := ev.StartDate.AddDate(0, 0, 1)
+		adjustedEndDate := ev.EndDate.AddDate(0, 0, 1)
+		vnLoc, _ := time.LoadLocation("Asia/Ho_Chi_Minh")
+		startVN := adjustedStartDate.In(vnLoc)
+		endVN := adjustedEndDate.In(vnLoc)
+		timeStr := fmt.Sprintf("%s, %s - %s", startVN.Format("02/01/2006"), startVN.Format("15:04"), endVN.Format("15:04"))
+		body := "<h3>Booking confirmed</h3><p>Title: " + templateEscape(ev.Title) + "</p><p>Time: " + templateEscape(timeStr) + "</p><p>Meeting link: " + templateEscape(link) + "</p>"
 		_ = utils.SendEmailTLS(*conf, utils.EmailMessage{
 			To:      []string{guestEmail},
 			Subject: "Your meeting is confirmed",
@@ -1023,12 +1154,41 @@ func (b *BookingController) PublicTokenAccept(c echo.Context) error {
 		_ = json.Unmarshal([]byte(*ev.Preferences), &p)
 		guestEmail = strings.TrimSpace(p.GuestEmail)
 	}
+	
+	// Get timezone, default to Asia/Ho_Chi_Minh if empty
+	timezone := ev.Timezone
+	if timezone == "" {
+		timezone = "Asia/Ho_Chi_Minh"
+	}
+	
+	// IMPORTANT: Add 1 day to the booking time when accepting
+	// User selects time, but when accepting, automatically add 1 day
+	adjustedStartDate := ev.StartDate.AddDate(0, 0, 1)
+	adjustedEndDate := ev.EndDate.AddDate(0, 0, 1)
+	
+	// Log the time values for debugging
+	logger.Info("PublicTokenAccept:FormattingTime",
+		"event_id", eventID.String(),
+		"original_start_utc", ev.StartDate.Format(time.RFC3339),
+		"original_end_utc", ev.EndDate.Format(time.RFC3339),
+		"adjusted_start_utc", adjustedStartDate.Format(time.RFC3339),
+		"adjusted_end_utc", adjustedEndDate.Format(time.RFC3339),
+		"timezone", timezone)
+	
+	startTimeFormatted := formatTimeInTimezone(adjustedStartDate, timezone)
+	endTimeFormatted := formatTimeInTimezone(adjustedEndDate, timezone)
+	
+	logger.Info("PublicTokenAccept:FormattedTime",
+		"event_id", eventID.String(),
+		"start_time_formatted", startTimeFormatted,
+		"end_time_formatted", endTimeFormatted)
+	
 	req := &caldto.CreateEventRequest{
 		Title:       ev.Title,
 		Description: "Personal booking",
-		StartTime:   ev.StartDate.Format(time.RFC3339),
-		EndTime:     ev.EndDate.Format(time.RFC3339),
-		Timezone:    ev.Timezone,
+		StartTime:   startTimeFormatted,
+		EndTime:     endTimeFormatted,
+		Timezone:    timezone,
 	}
 	if guestEmail != "" {
 		req.Attendees = []string{guestEmail}
@@ -1046,12 +1206,19 @@ func (b *BookingController) PublicTokenAccept(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, errors.NewAppError(errors.ErrInternalServer, "failed to update event", err))
 	}
 
-	// Format event time for display
+	// Format event time for display (with +1 day adjustment)
 	eventTimeStr := "Chưa xác định"
 	if ev.StartDate != nil && ev.EndDate != nil {
-		startTime := ev.StartDate.Format("15:04")
-		endTime := ev.EndDate.Format("15:04")
-		dateStr := ev.StartDate.Format("02/01/2006")
+		// Add 1 day for display (same as when creating calendar event)
+		adjustedStartDate := ev.StartDate.AddDate(0, 0, 1)
+		adjustedEndDate := ev.EndDate.AddDate(0, 0, 1)
+		// Convert to VN timezone for display
+		vnLoc, _ := time.LoadLocation("Asia/Ho_Chi_Minh")
+		startVN := adjustedStartDate.In(vnLoc)
+		endVN := adjustedEndDate.In(vnLoc)
+		startTime := startVN.Format("15:04")
+		endTime := endVN.Format("15:04")
+		dateStr := startVN.Format("02/01/2006")
 		eventTimeStr = fmt.Sprintf("%s, %s - %s", dateStr, startTime, endTime)
 	}
 
